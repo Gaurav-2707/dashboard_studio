@@ -1,0 +1,229 @@
+.page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+}
+
+.modal {
+  width: 100%;
+  max-width: 520px;
+  padding: 2.5rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  text-align: center;
+}
+
+.warningIcon {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.modalTitle {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #fca5a5;
+  margin-bottom: 8px;
+}
+
+.modalDesc {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.alert {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  margin-bottom: 1.25rem;
+  text-align: left;
+}
+
+.alertPassword {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.alertMfa {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+
+.alertConfirm {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.stepBox {
+  margin-bottom: 1.25rem;
+  text-align: left;
+}
+
+.stepHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.stepNumber {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.stepLabel {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+}
+
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #e0e0e8;
+  font-size: 0.9rem;
+  outline: none;
+  box-sizing: border-box;
+}
+
+/* Hide native browser password reveal button */
+.input::-ms-reveal,
+.input::-ms-clear {
+  display: none;
+}
+
+.input:focus {
+  border-color: #6366f1;
+}
+
+.qrSection {
+  margin-bottom: 10px;
+}
+
+.qrText {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.45);
+  margin-bottom: 6px;
+}
+
+.qrUri {
+  display: block;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  font-size: 0.7rem;
+  color: #a5b4fc;
+  word-break: break-all;
+  margin-bottom: 10px;
+}
+
+.enrollBtn {
+  padding: 8px 14px;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 8px;
+  color: #a5b4fc;
+  font-size: 0.8rem;
+  cursor: pointer;
+  margin-bottom: 10px;
+  width: 100%;
+}
+
+.deleteBtn {
+  width: 100%;
+  padding: 13px;
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  border: none;
+  border-radius: 10px;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  transition: opacity 0.2s;
+}
+
+.deleteBtn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.deleteBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cancelBtn {
+  margin-top: 1rem;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+
+.cancelBtn:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Success state */
+.successCard {
+  max-width: 420px;
+  margin: 10vh auto;
+  padding: 3rem;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+}
+
+.successIcon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.successCard h2 {
+  color: #f0f0f5;
+  margin-bottom: 0.5rem;
+}
+
+.successCard p {
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 1.5rem;
+}
+
+.backBtn {
+  padding: 10px 24px;
+  background: #6366f1;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}

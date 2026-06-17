@@ -1,0 +1,10 @@
+flask==3.1.1
+flask-cors==5.0.1
+gunicorn==23.0.0
+PyJWT==2.10.1
+supabase==2.13.0
+openpyxl==3.1.5
+defusedxml==0.7.1
+python-dotenv==1.0.1
+python-calamine==0.6.2
+
