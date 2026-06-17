@@ -5127,3 +5127,35 @@ IMPORTANT: Inside the JSON string values, do not use double quotes. Use single q
 2026-06-17 15:46:47,713 INFO: HTTP Request: GET https://rtjymjvfgaipjozzmmik.supabase.co/rest/v1/insights_cache?select=insights&survey_id=eq.fa950d91-c56d-4ca4-94da-277971fff950&table_id=eq.1&active_columns_hash=eq.Total&limit=1 "HTTP/1.1 200 OK" [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\httpx\_client.py:1025]
 2026-06-17 15:46:47,713 INFO: Insights cache hit for survey fa950d91-c56d-4ca4-94da-277971fff950, table 1, columns: Total [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\routes\insights.py:106]
 2026-06-17 15:46:47,714 INFO: 127.0.0.1 - - [17/Jun/2026 15:46:47] "POST /api/surveys/insights HTTP/1.1" 200 - [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\werkzeug\_internal.py:97]
+2026-06-17 15:54:13,822 INFO:  * Detected change in 'C:\\Users\\Gaurav Srivastava\\Desktop\\dashify\\api\\routes\\insights.py', reloading [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\werkzeug\_internal.py:97]
+2026-06-17 15:54:13,884 INFO:  * Detected change in 'C:\\Users\\Gaurav Srivastava\\Desktop\\dashify\\api\\routes\\insights.py', reloading [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\werkzeug\_internal.py:97]
+2026-06-17 15:54:14,952 INFO:  * Restarting with stat [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\werkzeug\_internal.py:97]
+2026-06-17 15:54:15,055 INFO:  * Restarting with stat [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\werkzeug\_internal.py:97]
+2026-06-17 15:54:16,603 INFO: Successfully monkeypatched SyncPostgrestClient to disable HTTP/2. [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\services\supabase_client.py:37]
+2026-06-17 15:54:16,632 INFO: Successfully monkeypatched SyncPostgrestClient to disable HTTP/2. [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\services\supabase_client.py:37]
+2026-06-17 15:54:20,394 WARNING:  * Debugger is active! [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\werkzeug\_internal.py:97]
+2026-06-17 15:54:20,397 WARNING:  * Debugger is active! [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\werkzeug\_internal.py:97]
+2026-06-17 15:54:20,401 INFO:  * Debugger PIN: 113-319-398 [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\werkzeug\_internal.py:97]
+2026-06-17 15:54:20,405 INFO:  * Debugger PIN: 113-319-398 [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\werkzeug\_internal.py:97]
+2026-06-17 15:54:20,625 INFO: Initializing global Supabase client singleton instance. [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\services\supabase_client.py:47]
+2026-06-17 15:54:21,649 INFO: HTTP Request: GET https://rtjymjvfgaipjozzmmik.supabase.co/auth/v1/user "HTTP/2 200 OK" [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\httpx\_client.py:1025]
+2026-06-17 15:54:21,650 INFO: Generating insights for user 11739275-ce90-4f53-a46f-2c7f911b998b (Role: admin) on table 1 [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\routes\insights.py:29]
+2026-06-17 15:54:23,283 INFO: HTTP Request: GET https://rtjymjvfgaipjozzmmik.supabase.co/rest/v1/parsed_surveys?select=id%2Ccompany_id%2Csurvey_data&id=eq.fa950d91-c56d-4ca4-94da-277971fff950&limit=1 "HTTP/1.1 200 OK" [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\httpx\_client.py:1025]
+2026-06-17 15:54:24,701 INFO: HTTP Request: GET https://rtjymjvfgaipjozzmmik.supabase.co/rest/v1/ignored_agencies?select=agency_name&company_id=eq.f68dcf70-48ec-4e18-963f-7f3d758ad8b3 "HTTP/1.1 200 OK" [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\httpx\_client.py:1025]
+2026-06-17 15:54:25,238 INFO: HTTP Request: GET https://rtjymjvfgaipjozzmmik.supabase.co/rest/v1/companies?select=name%2Cindustry&id=eq.f68dcf70-48ec-4e18-963f-7f3d758ad8b3&limit=1 "HTTP/1.1 200 OK" [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\httpx\_client.py:1025]
+2026-06-17 15:54:25,239 INFO: Formatted System Prompt:
+You are a Senior Strategic Market Research Consultant specializing in the Automotive sector (Maruti landscape). You are analyzing survey chart data for 'Maruti'.
+
+Provide exactly 3 highly actionable, market-specific insights.
+Do not simply translate or repeat the chart data (do not just state 'X is Y%'). Instead, synthesize the percentages to explain the underlying consumer psychology, socioeconomic drivers, or regional preferences unique to the Indian market.
+
+You must output your response ONLY as a valid JSON array of exactly 3 objects. Do not include any introductory text, markdown block wraps (like ```json), or conversational filler.
+IMPORTANT: Inside the JSON string values, do not use double quotes. Use single quotes if you need to quote something. Ensure all string values are strictly single-line and do not contain raw newlines. The JSON array must conform to the following schema:
+[
+  {
+    "Topic": "Brief label of the analyzed segment/topic (e.g., North Zone, Tier 4 Cities)",
+    "Insight": "Synthesis of consumer psychology and socioeconomic drivers behind the data (1-2 sentences).",
+    "Takeaway": "Actionable recommendation for Maruti product positioning or marketing (1-2 sentences).",
+    "Data Reference": "Specific supporting percentages/bases cited from the data."
+  }
+] [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\routes\insights.py:125]
