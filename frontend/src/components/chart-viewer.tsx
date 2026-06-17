@@ -15,6 +15,7 @@ import type {
 } from "@/lib/types";
 import { COLOR_PALETTES, CHART_SIZES, NON_RESPONSE_ROWS } from "@/lib/types";
 import { getAIInsights } from "@/lib/flask-api";
+import { createClient } from "@/lib/supabase/client";
 
 // Dynamic import for Plotly to avoid SSR issues
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false }) as any;
@@ -295,7 +296,10 @@ export default function ChartViewer({
     setInsightError(null);
     setInsightContent(null);
     try {
-      const data = await getAIInsights(accessToken, {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || accessToken;
+      const data = await getAIInsights(token, {
         survey_id: surveyId,
         table_id: selectedTableId,
         chart_type: chartType,
@@ -324,7 +328,7 @@ export default function ChartViewer({
 
       const labelLower = label.toLowerCase().trim();
       if (labelLower === "unspecified") continue;
-      if (/(?:top\s*2\s*box|bottom\s*2\s*box|top\s*two\s*box|bottom\s*two\s*box|t2b|b2b)/i.test(label))
+      if (/(?:top\s*2\s*box|bottom\s*2\s*box|top\s*two\s*box|bottom\s*two\s*box|t2b|b2b|top\s*box|bottom\s*box)/i.test(label))
         continue;
 
       let cleanLabel = label.replace(/\s*\([^)]*specify[^)]*\)/i, "");
@@ -501,6 +505,7 @@ export default function ChartViewer({
         mirror: true,
         linecolor: "#cbd5e1",
         linewidth: 0.5,
+        automargin: true,
         tickangle: chartType === "Horizontal bar" ? undefined : -labelRotation,
         title: chartType === "Horizontal bar" ? axisLabel : undefined,
         tickfont: { size: 10, color: "#475569" },
@@ -512,6 +517,7 @@ export default function ChartViewer({
         mirror: true,
         linecolor: "#cbd5e1",
         linewidth: 0.5,
+        automargin: true,
         title: chartType !== "Horizontal bar" ? axisLabel : undefined,
         tickfont: { size: 10, color: "#475569" },
       },
@@ -553,7 +559,6 @@ export default function ChartViewer({
             const matchedId = tableIds.find((id) => (surveyData[id]?.title || `Table ${id}`) === val);
             if (matchedId) {
               setSelectedTableId(matchedId);
-              setGroups([["Total"]]);
             }
           }}
           onFocus={(e) => {
@@ -912,7 +917,7 @@ export default function ChartViewer({
                   <tr>
                     <th className="px-md py-2 font-medium">Group</th>
                     <th className="px-md py-2 font-medium">Top Break</th>
-                    <th className="px-md py-2 font-medium text-right">Base (n)</th>
+                    <th className="px-md py-2 font-medium text-right">Base</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/5">
@@ -996,7 +1001,7 @@ export default function ChartViewer({
             <div className="p-gutter space-y-md bg-surface-container-low/30">
               {!insightContent && !generatingInsights && !insightError && (
                 <div className="flex flex-col items-center justify-center py-lg text-center">
-                  <p className="text-on-surface-variant text-sm max-w-md">
+                  <p className="text-on-surface-variant text-sm max-w-xxl">
                     {activeColumns.length === 0
                       ? "Select one or more columns/groups in the sidebar to auto-generate strategic insights."
                       : "No insights found."}
@@ -1025,7 +1030,7 @@ export default function ChartViewer({
                 </div>
               )}
 
-              {insightContent && (
+              {insightContent && Array.isArray(insightContent) && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-md">
                   {insightContent.map((item, idx) => (
                     <div key={idx} className="p-md rounded-xl bg-white/5 border border-outline-variant/10 flex flex-col gap-xs relative overflow-hidden group hover:border-primary/30 transition-all duration-300">

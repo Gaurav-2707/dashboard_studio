@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getSurvey, createUser, deleteUser, addAgency, deleteAgency } from "@/lib/flask-api";
 import { signOut } from "@/actions/auth";
+import { createClient } from "@/lib/supabase/client";
 import SurveyUpload from "@/components/survey-upload";
 import DeleteSurveyButton from "@/components/delete-survey-button";
 import ChartViewer from "@/components/chart-viewer";
@@ -38,6 +39,16 @@ export default function DashboardClient({
   const router = useRouter();
   const searchParams = useSearchParams();
   const querySurveyId = searchParams.get("survey_id");
+
+  const getFreshToken = async () => {
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      return session?.access_token || accessToken;
+    } catch {
+      return accessToken;
+    }
+  };
 
   const [activeSurveyId, setActiveSurveyId] = useState<string | null>(null);
   const [activeSurveyFilename, setActiveSurveyFilename] = useState<string>("");
@@ -130,7 +141,8 @@ export default function DashboardClient({
     setCreatingUser(true);
     setModalError(null);
     try {
-      const user = await createUser(accessToken, {
+      const token = await getFreshToken();
+      const user = await createUser(token, {
         email: newUserEmail,
         password: newUserPassword,
         company_id: companyId,
@@ -172,7 +184,8 @@ export default function DashboardClient({
       isDestructive: true,
       onConfirm: async () => {
         try {
-          await deleteUser(accessToken, userId);
+          const token = await getFreshToken();
+          await deleteUser(token, userId);
           setProfiles((prev) => prev.filter((p) => p.id !== userId));
           router.refresh();
         } catch (err: any) {
@@ -195,7 +208,8 @@ export default function DashboardClient({
     setCreatingAgency(true);
     setAgencyModalError(null);
     try {
-      const agency = await addAgency(accessToken, {
+      const token = await getFreshToken();
+      const agency = await addAgency(token, {
         agency_name: newAgencyName.trim(),
         company_id: companyId,
       });
@@ -219,7 +233,8 @@ export default function DashboardClient({
       isDestructive: true,
       onConfirm: async () => {
         try {
-          await deleteAgency(accessToken, agencyId);
+          const token = await getFreshToken();
+          await deleteAgency(token, agencyId);
           setAgencies((prev) => prev.filter((a) => a.id !== agencyId));
           router.refresh();
         } catch (err: any) {
@@ -277,7 +292,8 @@ export default function DashboardClient({
       setLoadingSurvey(true);
       setError(null);
       try {
-        const parsed = await getSurvey(accessToken, surveyId);
+        const token = await getFreshToken();
+        const parsed = await getSurvey(token, surveyId);
         setSurveyData(parsed.survey_data || {});
       } catch (err: any) {
         console.error("Error loading survey data on-the-fly:", err);
