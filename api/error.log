@@ -5159,3 +5159,15 @@ IMPORTANT: Inside the JSON string values, do not use double quotes. Use single q
     "Data Reference": "Specific supporting percentages/bases cited from the data."
   }
 ] [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\routes\insights.py:125]
+2026-06-17 15:54:32,064 INFO: HTTP Request: POST https://integrate.api.nvidia.com/v1/chat/completions "HTTP/1.1 200 OK" [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\httpx\_client.py:1025]
+2026-06-17 15:54:32,077 INFO: 127.0.0.1 - - [17/Jun/2026 15:54:32] "POST /api/surveys/insights HTTP/1.1" 200 - [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\werkzeug\_internal.py:97]
+2026-06-18 09:42:07,772 INFO: Successfully monkeypatched SyncPostgrestClient to disable HTTP/2. [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\services\supabase_client.py:37]
+2026-06-18 09:42:12,313 INFO: [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.25:5000 [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\werkzeug\_internal.py:97]
+2026-06-18 09:42:12,313 INFO: [33mPress CTRL+C to quit[0m [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\werkzeug\_internal.py:97]
+2026-06-18 09:42:12,316 INFO:  * Restarting with stat [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\werkzeug\_internal.py:97]
+2026-06-18 09:42:13,912 INFO: Successfully monkeypatched SyncPostgrestClient to disable HTTP/2. [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\services\supabase_client.py:37]
+2026-06-18 09:42:24,559 WARNING:  * Debugger is active! [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\werkzeug\_internal.py:97]
+2026-06-18 09:42:24,567 INFO:  * Debugger PIN: 113-319-398 [in C:\Users\Gaurav Srivastava\Desktop\dashify\api\venv\Lib\site-packages\werkzeug\_internal.py:97]
