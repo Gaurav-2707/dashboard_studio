@@ -15,6 +15,7 @@ import type {
 } from "@/lib/types";
 import { COLOR_PALETTES, CHART_SIZES, NON_RESPONSE_ROWS } from "@/lib/types";
 import { getAIInsights } from "@/lib/flask-api";
+import { createClient } from "@/lib/supabase/client";
 
 // Dynamic import for Plotly to avoid SSR issues
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false }) as any;
@@ -24,6 +25,8 @@ interface ChartViewerProps {
   filename: string;
   surveyData: SurveyData;
   accessToken: string;
+  role?: "admin" | "analyst";
+  companyId?: string;
 }
 
 // ============================================================================
@@ -65,9 +68,7 @@ function getAvailableColumns(
       cols.add(key);
     }
   }
-  return Array.from(cols)
-    .filter((c) => !["IPSOS", "KANTAR"].includes(c.toUpperCase()))
-    .sort();
+  return Array.from(cols).sort();
 }
 
 function wrapText(text: string, width: number): string[] {
@@ -205,6 +206,8 @@ export default function ChartViewer({
   filename,
   surveyData,
   accessToken,
+  role = "analyst",
+  companyId = "",
 }: ChartViewerProps) {
   // --- State ---
   const tableIds = useMemo(
@@ -228,6 +231,29 @@ export default function ChartViewer({
   const [showGridlines, setShowGridlines] = useState(true);
   const [labelRotation, setLabelRotation] = useState(35);
   const [showCustomization, setShowCustomization] = useState(false);
+  const [showTablePreview, setShowTablePreview] = useState(false);
+
+  const [saveToCache, setSaveToCache] = useState(() => {
+    if (typeof window !== "undefined" && surveyId) {
+      const stored = localStorage.getItem(`dashify_save_insights_${surveyId}`);
+      return stored ? stored === "true" : false;
+    }
+    return false;
+  });
+
+  const handleSaveToCacheChange = (checked: boolean) => {
+    setSaveToCache(checked);
+    if (typeof window !== "undefined" && surveyId) {
+      localStorage.setItem(`dashify_save_insights_${surveyId}`, String(checked));
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && surveyId) {
+      const stored = localStorage.getItem(`dashify_save_insights_${surveyId}`);
+      setSaveToCache(stored ? stored === "true" : false);
+    }
+  }, [surveyId]);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -295,11 +321,15 @@ export default function ChartViewer({
     setInsightError(null);
     setInsightContent(null);
     try {
-      const data = await getAIInsights(accessToken, {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || accessToken;
+      const data = await getAIInsights(token, {
         survey_id: surveyId,
         table_id: selectedTableId,
         chart_type: chartType,
         active_columns: cols,
+        save_to_cache: saveToCache,
       });
       setInsightContent(data.insight);
     } catch (err: any) {
@@ -308,7 +338,7 @@ export default function ChartViewer({
     } finally {
       setGeneratingInsights(false);
     }
-  }, [accessToken, surveyId, selectedTableId, chartType, activeColumns]);
+  }, [accessToken, surveyId, selectedTableId, chartType, activeColumns, saveToCache]);
 
   // Auto-fetch insights when question selection or active columns change
   useEffect(() => {
@@ -324,7 +354,7 @@ export default function ChartViewer({
 
       const labelLower = label.toLowerCase().trim();
       if (labelLower === "unspecified") continue;
-      if (/(?:top\s*2\s*box|bottom\s*2\s*box|top\s*two\s*box|bottom\s*two\s*box|t2b|b2b)/i.test(label))
+      if (/(?:top\s*2\s*box|bottom\s*2\s*box|top\s*two\s*box|bottom\s*two\s*box|t2b|b2b|top\s*box|bottom\s*box)/i.test(label))
         continue;
 
       let cleanLabel = label.replace(/\s*\([^)]*specify[^)]*\)/i, "");
@@ -406,7 +436,7 @@ export default function ChartViewer({
       const values = filtered.map((d) => d.value);
 
       const baseTrace: Record<string, unknown> = {
-        name: breakName.length > 22 ? breakName.slice(0, 19) + "..." : breakName,
+        name: wrapText(breakName, 22).join("<br>"),
         marker: { color: colors[idx % colors.length] },
       };
 
@@ -501,6 +531,7 @@ export default function ChartViewer({
         mirror: true,
         linecolor: "#cbd5e1",
         linewidth: 0.5,
+        automargin: true,
         tickangle: chartType === "Horizontal bar" ? undefined : -labelRotation,
         title: chartType === "Horizontal bar" ? axisLabel : undefined,
         tickfont: { size: 10, color: "#475569" },
@@ -512,6 +543,7 @@ export default function ChartViewer({
         mirror: true,
         linecolor: "#cbd5e1",
         linewidth: 0.5,
+        automargin: true,
         title: chartType !== "Horizontal bar" ? axisLabel : undefined,
         tickfont: { size: 10, color: "#475569" },
       },
@@ -553,7 +585,6 @@ export default function ChartViewer({
             const matchedId = tableIds.find((id) => (surveyData[id]?.title || `Table ${id}`) === val);
             if (matchedId) {
               setSelectedTableId(matchedId);
-              setGroups([["Total"]]);
             }
           }}
           onFocus={(e) => {
@@ -578,6 +609,32 @@ export default function ChartViewer({
           ))}
         </datalist>
       </div>
+
+      {role === "admin" && (
+        <div className="p-3 bg-surface-container-high/40 hover:bg-surface-container-high/60 rounded-xl border border-outline-variant/10 transition-all space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-label-md font-bold text-on-surface">Save responses to DB</span>
+              <span className="text-[10px] text-on-surface-variant leading-tight max-w-[170px]">
+                Toggle response logging
+              </span>
+            </div>
+            <button
+              onClick={() => handleSaveToCacheChange(!saveToCache)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none focus:ring-1 focus:ring-primary/40 ${saveToCache ? "bg-emerald-500" : "bg-white/10"
+                }`}
+              type="button"
+              role="switch"
+              aria-checked={saveToCache}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${saveToCache ? "translate-x-5" : "translate-x-0"
+                  }`}
+              />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Top Breaks Comparison */}
       <div className="space-y-sm pt-2">
@@ -923,7 +980,7 @@ export default function ChartViewer({
                         <td className="px-md py-2 text-secondary font-bold">
                           Group {idx + 1}
                         </td>
-                        <td className="px-md py-2 truncate max-w-[100px]" title={col}>
+                        <td className="px-md py-2 break-words max-w-[200px]" title={col}>
                           {col}
                         </td>
                         <td className="px-md py-2 text-right">
@@ -1061,61 +1118,69 @@ export default function ChartViewer({
 
         {/* Cross-tab Data Table Section */}
         <section className="glass-panel rounded-xl overflow-hidden shadow-lg">
-          <div className="p-gutter flex items-center justify-between border-b border-outline-variant/10 bg-white/5">
+          <button
+            onClick={() => setShowTablePreview(!showTablePreview)}
+            className="w-full p-gutter flex items-center justify-between border-b border-outline-variant/10 bg-white/5 cursor-pointer outline-none"
+          >
             <h3 className="font-headline-md text-on-surface flex items-center gap-2">
               <span className="material-symbols-outlined text-primary">table_rows</span>
               Data Table Preview
             </h3>
-          </div>
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left font-label-md whitespace-nowrap">
-              <thead className="bg-white/5 text-on-surface-variant border-b border-outline-variant/20">
-                <tr>
-                  <th className="px-md py-4 font-bold">Side Breaks</th>
-                  {activeColumns.map((col) => (
-                    <th key={col} className="px-md py-4 font-bold">
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-outline-variant/5">
-                {[...uniqueAnswers]
-                  .sort((a, b) => {
-                    const aMax = Math.max(
-                      ...chartData.filter((d) => d.answer === a).map((d) => d.value),
-                      0
-                    );
-                    const bMax = Math.max(
-                      ...chartData.filter((d) => d.answer === b).map((d) => d.value),
-                      0
-                    );
-                    return bMax - aMax;
-                  })
-                  .map((answer) => (
-                    <tr key={answer} className="hover:bg-white/5 transition-colors">
-                      <td className="px-md py-3 text-primary truncate max-w-[240px]" title={answer}>
-                        {answer}
-                      </td>
-                      {activeColumns.map((col) => {
-                        const record = chartData.find(
-                          (d) => d.answer === answer && d.topBreak === col
-                        );
-                        return (
-                          <td key={col} className="px-md py-3 font-semibold text-on-surface">
-                            {record
-                              ? roundValues
-                                ? `${record.value.toFixed(0)}%`
-                                : `${record.value.toFixed(2)}%`
-                              : "—"}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
+            <span className={`material-symbols-outlined transition-transform duration-200 ${showTablePreview ? "rotate-180" : ""}`}>
+              expand_more
+            </span>
+          </button>
+          {showTablePreview && (
+            <div className="overflow-x-auto custom-scrollbar">
+              <table className="w-full text-left font-label-md whitespace-nowrap">
+                <thead className="bg-white/5 text-on-surface-variant border-b border-outline-variant/20">
+                  <tr>
+                    <th className="px-md py-4 font-bold">Side Breaks</th>
+                    {activeColumns.map((col) => (
+                      <th key={col} className="px-md py-4 font-bold">
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant/5">
+                  {[...uniqueAnswers]
+                    .sort((a, b) => {
+                      const aMax = Math.max(
+                        ...chartData.filter((d) => d.answer === a).map((d) => d.value),
+                        0
+                      );
+                      const bMax = Math.max(
+                        ...chartData.filter((d) => d.answer === b).map((d) => d.value),
+                        0
+                      );
+                      return bMax - aMax;
+                    })
+                    .map((answer) => (
+                      <tr key={answer} className="hover:bg-white/5 transition-colors">
+                        <td className="px-md py-3 text-primary truncate max-w-[240px]" title={answer}>
+                          {answer}
+                        </td>
+                        {activeColumns.map((col) => {
+                          const record = chartData.find(
+                            (d) => d.answer === answer && d.topBreak === col
+                          );
+                          return (
+                            <td key={col} className="px-md py-3 font-semibold text-on-surface">
+                              {record
+                                ? roundValues
+                                  ? `${record.value.toFixed(0)}%`
+                                  : `${record.value.toFixed(2)}%`
+                                : "—"}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       </div>
 

@@ -85,7 +85,25 @@ export async function deleteCompany(formData: FormData): Promise<DeleteCompanyRe
     }
   }
 
-  // 3. Delete the company record
+  // 3. Clean up all cached insights associated with the company's surveys first
+  const { data: companySurveys } = await adminSupabase
+    .from("parsed_surveys")
+    .select("id")
+    .eq("company_id", companyId);
+
+  if (companySurveys && companySurveys.length > 0) {
+    const surveyIds = companySurveys.map((s) => s.id);
+    const { error: cacheDeleteError } = await adminSupabase
+      .from("insights_cache")
+      .delete()
+      .in("survey_id", surveyIds);
+
+    if (cacheDeleteError) {
+      console.error("Failed to clean up cached insights during company deletion:", cacheDeleteError);
+    }
+  }
+
+  // 4. Delete the company record
   const { error: deleteError } = await adminSupabase
     .from("companies")
     .delete()

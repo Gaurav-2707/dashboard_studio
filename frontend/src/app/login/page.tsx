@@ -47,20 +47,6 @@ export default function LoginPage() {
             <h1 className={styles.logoText}>Dashify</h1>
           </div>
           <p className={styles.tagline}>Survey Intelligence, Simplified</p>
-          <div className={styles.features}>
-            <div className={styles.feature}>
-              <span className={styles.featureIcon}>📊</span>
-              <span>Advanced cross-tab analysis</span>
-            </div>
-            <div className={styles.feature}>
-              <span className={styles.featureIcon}>🔒</span>
-              <span>Enterprise-grade security</span>
-            </div>
-            <div className={styles.feature}>
-              <span className={styles.featureIcon}>⚡</span>
-              <span>Real-time intersection math</span>
-            </div>
-          </div>
         </div>
         <div className={styles.dots} aria-hidden="true" />
       </div>
@@ -152,10 +138,6 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-
-          <p className={styles.footer}>
-            Secured by Supabase Auth
-          </p>
         </div>
       </div>
     </div>

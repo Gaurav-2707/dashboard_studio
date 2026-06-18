@@ -196,6 +196,7 @@ export async function getAIInsights(
     table_id: string;
     chart_type: string;
     active_columns: string[];
+    save_to_cache?: boolean;
   }
 ): Promise<{ insight: Array<{ Topic: string; Insight: string; Takeaway: string; "Data Reference"?: string }> }> {
   return apiFetch("/api/surveys/insights", token, {

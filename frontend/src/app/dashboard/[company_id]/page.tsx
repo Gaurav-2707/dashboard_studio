@@ -42,7 +42,6 @@ export default async function SurveysPage({ params }: SurveysPageProps) {
   // 4. Fetch lists based on role permissions
   let surveys: any[] = [];
   let profiles: any[] = [];
-  let ignoredAgencies: any[] = [];
 
   // Always fetch surveys metadata
   const { data: surveysData } = await supabase
@@ -52,28 +51,12 @@ export default async function SurveysPage({ params }: SurveysPageProps) {
     .order("uploaded_at", { ascending: false });
   surveys = surveysData || [];
 
-  // Fetch ignored agencies count
-  const { count: ignoredAgenciesCount } = await supabase
-    .from("ignored_agencies")
-    .select("id", { count: "exact", head: true })
-    .eq("company_id", company_id);
-
-  // If admin, fetch full users & ignored agencies data for management tabs
+  // If admin, fetch full users data for management tabs
   if (role === "admin") {
-    const [companyUsers, agenciesRes] = await Promise.all([
-      listUsers(accessToken, company_id).catch((err) => {
-        console.error("Failed to fetch users from Flask API:", err);
-        return [];
-      }),
-      supabase
-        .from("ignored_agencies")
-        .select("id, agency_name, created_at")
-        .eq("company_id", company_id)
-        .order("created_at", { ascending: false }),
-    ]);
-
-    profiles = companyUsers;
-    ignoredAgencies = agenciesRes.data || [];
+    profiles = await listUsers(accessToken, company_id).catch((err) => {
+      console.error("Failed to fetch users from Flask API:", err);
+      return [];
+    });
   }
 
   return (
@@ -154,8 +137,6 @@ export default async function SurveysPage({ params }: SurveysPageProps) {
         companyName={companyName}
         initialSurveys={surveys}
         initialProfiles={profiles}
-        initialIgnoredAgencies={ignoredAgencies}
-        initialIgnoredAgenciesCount={ignoredAgenciesCount || 0}
         role={role}
         accessToken={accessToken}
       />

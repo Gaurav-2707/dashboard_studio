@@ -33,23 +33,19 @@ def decrypt_password(cipher_b64: str, secret: str) -> str:
 
 companies_bp = Blueprint("companies", __name__)
 
-# Default agencies to seed for every new company
-DEFAULT_IGNORED_AGENCIES = ["IPSOS", "KANTAR"]
-
-
 @companies_bp.route("/companies", methods=["POST"])
 @require_auth(allowed_roles=["admin"])
 def create_company():
     """
-    Create a new company and seed default ignored agencies.
+    Create a new company.
 
     Expects JSON:
     {
         "name": "Acme Corp",
-        "ignored_agencies": ["IPSOS", "KANTAR"]  // optional override
+        "industry": "Automotive"
     }
 
-    Returns: { company_id, name, ignored_agencies }
+    Returns: { company_id, name, industry }
     """
     payload = request.get_json(silent=True) or {}
     company_name = payload.get("name", "").strip()
@@ -63,11 +59,6 @@ def create_company():
 
     if industry and len(industry) > 200:
         return jsonify({"error": "Industry must be 200 characters or less."}), 400
-
-    # Optional: override default agencies
-    agencies = payload.get("ignored_agencies", DEFAULT_IGNORED_AGENCIES)
-    if not isinstance(agencies, list):
-        return jsonify({"error": "ignored_agencies must be a list of strings."}), 400
 
     cfg = current_app.config["DASHIFY_CONFIG"]
     supabase = get_supabase_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
@@ -98,26 +89,14 @@ def create_company():
 
     company_id = company_result.data[0]["id"]
 
-    # --- 3. Seed ignored agencies ---
-    if agencies:
-        agency_rows = [
-            {"company_id": company_id, "agency_name": name.strip()}
-            for name in agencies
-            if name.strip()
-        ]
-        if agency_rows:
-            supabase.table("ignored_agencies").insert(agency_rows).execute()
-
     logger.info(
-        f"Company created: '{company_name}' (id={company_id}) "
-        f"with {len(agencies)} ignored agencies by admin {g.user_id}"
+        f"Company created: '{company_name}' (id={company_id}) by admin {g.user_id}"
     )
 
     return jsonify({
         "company_id": company_id,
         "name": company_name,
         "industry": industry,
-        "ignored_agencies": agencies,
     }), 201
 
 
@@ -365,96 +344,5 @@ def delete_user(user_id):
         return jsonify({"error": str(e)}), 500
 
 
-@companies_bp.route("/companies/agencies", methods=["POST"])
-@require_auth(allowed_roles=["admin"])
-def add_agency():
-    """
-    Add a new agency header for the company workspace. Admin-only.
-    Expects JSON:
-    {
-        "company_id": "uuid", // optional for tenant admin, required for global admin
-        "agency_name": "agency name"
-    }
-    """
-    payload = request.get_json(silent=True)
-    if not payload:
-        return jsonify({"error": "Invalid JSON payload."}), 400
 
-    agency_name = payload.get("agency_name", "").strip()
-    if not agency_name:
-        return jsonify({"error": "Agency name is required."}), 400
-
-    # Determine company_id
-    company_id = g.company_id
-    if not company_id or company_id == "null":
-        company_id = payload.get("company_id")
-
-    if not company_id:
-        return jsonify({"error": "company_id is required."}), 400
-
-    cfg = current_app.config["DASHIFY_CONFIG"]
-    supabase = get_supabase_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
-
-    try:
-        # Check for duplicates first
-        existing = (
-            supabase.table("ignored_agencies")
-            .select("id")
-            .eq("company_id", company_id)
-            .eq("agency_name", agency_name)
-            .execute()
-        )
-        if existing.data:
-            return jsonify({"error": f"Agency '{agency_name}' is already registered."}), 409
-
-        result = (
-            supabase.table("ignored_agencies")
-            .insert({
-                "company_id": company_id,
-                "agency_name": agency_name
-            })
-            .execute()
-        )
-
-        if not result.data:
-            return jsonify({"error": "Failed to add agency."}), 500
-
-        logger.info(f"Agency {result.data[0]['id']} ({agency_name}) added to company {company_id} by admin {g.user_id}")
-        return jsonify(result.data[0]), 201
-    except Exception as e:
-        logger.exception("Error adding agency")
-        return jsonify({"error": str(e)}), 500
-
-
-@companies_bp.route("/companies/agencies/<agency_id>", methods=["DELETE"])
-@require_auth(allowed_roles=["admin"])
-def delete_agency(agency_id):
-    """
-    Remove a research agency. Admin-only.
-    """
-    cfg = current_app.config["DASHIFY_CONFIG"]
-    supabase = get_supabase_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
-
-    try:
-        # Fetch agency to verify company constraint
-        agency_res = supabase.table("ignored_agencies").select("company_id", "agency_name").eq("id", agency_id).execute()
-        if not agency_res.data:
-            return jsonify({"error": "Agency not found."}), 404
-
-        target_company_id = agency_res.data[0]["company_id"]
-        agency_name = agency_res.data[0]["agency_name"]
-
-        # Verify company_id constraint for tenant admin
-        if g.company_id and g.company_id != "null":
-            if str(target_company_id) != str(g.company_id):
-                return jsonify({"error": "Forbidden: Agency belongs to a different company."}), 403
-
-        # Delete agency
-        supabase.table("ignored_agencies").delete().eq("id", agency_id).execute()
-
-        logger.info(f"Agency {agency_id} ({agency_name}) deleted by admin {g.user_id}")
-        return jsonify({"message": "Agency deleted successfully."}), 200
-    except Exception as e:
-        logger.exception("Error deleting agency")
-        return jsonify({"error": str(e)}), 500
 

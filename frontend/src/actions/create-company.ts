@@ -17,7 +17,6 @@ export async function createCompanyAction(
   formData: FormData
 ): Promise<CreateCompanyResult> {
   const companyName = formData.get("company_name") as string;
-  const agenciesRaw = formData.get("ignored_agencies") as string;
   const industry = formData.get("industry") as string;
 
   if (!companyName?.trim()) {
@@ -77,24 +76,6 @@ export async function createCompanyAction(
 
   if (createError || !newCompany) {
     return { success: false, error: "Failed to create company." };
-  }
-
-  // Seed ignored agencies
-  const defaultAgencies = ["IPSOS", "KANTAR"];
-  const customAgencies = agenciesRaw
-    ? agenciesRaw
-        .split(",")
-        .map((a) => a.trim())
-        .filter(Boolean)
-    : defaultAgencies;
-
-  const agencyRows = customAgencies.map((name) => ({
-    company_id: newCompany.id,
-    agency_name: name,
-  }));
-
-  if (agencyRows.length > 0) {
-    await supabase.from("ignored_agencies").insert(agencyRows);
   }
 
   return { success: true, company_id: newCompany.id };

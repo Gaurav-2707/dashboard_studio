@@ -195,18 +195,7 @@ export default function AdminPage() {
                     placeholder="e.g., Automotive, FMCG, Tech"
                   />
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-label-sm text-on-surface-variant">
-                    Agencies (comma-separated, optional)
-                  </label>
-                  <input
-                    name="ignored_agencies"
-                    type="text"
-                    className="w-full bg-surface-container-lowest border border-outline-variant/30 rounded-lg text-on-surface py-2 px-3 focus:ring-2 focus:ring-primary/50 outline-none text-label-md"
-                    placeholder="IPSOS, KANTAR"
-                    defaultValue="IPSOS, KANTAR"
-                  />
-                </div>
+
                 {createError && (
                   <p className="text-error text-label-sm">{createError}</p>
                 )}

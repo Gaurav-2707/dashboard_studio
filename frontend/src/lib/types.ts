@@ -21,12 +21,7 @@ export interface Profile {
   created_at: string;
 }
 
-export interface IgnoredAgency {
-  id: string;
-  company_id: string;
-  agency_name: string;
-  created_at: string;
-}
+
 
 export interface ParsedSurvey {
   id: string;
@@ -93,13 +88,11 @@ export interface AggregateResponse {
 
 export interface CreateCompanyRequest {
   name: string;
-  ignored_agencies?: string[];
 }
 
 export interface CreateCompanyResponse {
   company_id: string;
   name: string;
-  ignored_agencies: string[];
 }
 
 // ============================================================================

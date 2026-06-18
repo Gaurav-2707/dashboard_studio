@@ -11,14 +11,11 @@ export default async function IndexPage() {
     redirect("/login");
   }
 
-  // User is logged in. Let's find their company ID and role from profiles.
   const { data: profile } = await supabase
     .from("profiles")
     .select("company_id, role")
     .eq("id", user.id)
     .single();
-
-  console.log("[ROOT PAGE PROFILE]:", JSON.stringify(profile));
 
   if (profile?.role === "admin") {
     redirect("/admin");

@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { getSurvey, createUser, deleteUser, addAgency, deleteAgency } from "@/lib/flask-api";
+import { getSurvey, createUser, deleteUser } from "@/lib/flask-api";
 import { signOut } from "@/actions/auth";
 import SurveyUpload from "@/components/survey-upload";
 import DeleteSurveyButton from "@/components/delete-survey-button";
@@ -19,8 +19,6 @@ interface DashboardClientProps {
   companyName: string;
   initialSurveys: any[];
   initialProfiles: any[];
-  initialIgnoredAgencies: any[];
-  initialIgnoredAgenciesCount: number;
   role: "admin" | "analyst";
   accessToken: string;
 }
@@ -30,8 +28,6 @@ export default function DashboardClient({
   companyName,
   initialSurveys,
   initialProfiles,
-  initialIgnoredAgencies,
-  initialIgnoredAgenciesCount,
   role,
   accessToken,
 }: DashboardClientProps) {
@@ -48,7 +44,7 @@ export default function DashboardClient({
   const alerts = useAlerts();
 
   // Tab states (for admins only)
-  const [activeTab, setActiveTab] = useState<"surveys" | "users" | "agencies">("surveys");
+  const [activeTab, setActiveTab] = useState<"surveys" | "users">("surveys");
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -67,7 +63,21 @@ export default function DashboardClient({
   // Keep track of surveys in state so we can react to deletions immediately
   const [surveys, setSurveys] = useState(initialSurveys);
   const [profiles, setProfiles] = useState(initialProfiles);
-  const [agencies, setAgencies] = useState(initialIgnoredAgencies);
+
+  // Track logging states (Save to DB) for each survey
+  const [surveyLoggingStates, setSurveyLoggingStates] = useState<Record<string, boolean>>({});
+
+  // Load logging status for surveys from localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const states: Record<string, boolean> = {};
+      surveys.forEach((survey: any) => {
+        const stored = localStorage.getItem(`dashify_save_insights_${survey.id}`);
+        states[survey.id] = stored === "true";
+      });
+      setSurveyLoggingStates(states);
+    }
+  }, [surveys, activeSurveyId]);
 
   // Modal and user creation states
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -95,11 +105,7 @@ export default function DashboardClient({
     setShowModalPassword(true);
   };
 
-  // Agency creation states
-  const [showAddAgencyModal, setShowAddAgencyModal] = useState(false);
-  const [newAgencyName, setNewAgencyName] = useState("");
-  const [creatingAgency, setCreatingAgency] = useState(false);
-  const [agencyModalError, setAgencyModalError] = useState<string | null>(null);
+
 
   // Decode JWT sub to find the current user ID to prevent self-deletion
   const currentUserId = (() => {
@@ -187,52 +193,7 @@ export default function DashboardClient({
     });
   };
 
-  const handleCreateAgency = async () => {
-    if (!newAgencyName.trim()) {
-      setAgencyModalError("Agency name is required.");
-      return;
-    }
-    setCreatingAgency(true);
-    setAgencyModalError(null);
-    try {
-      const agency = await addAgency(accessToken, {
-        agency_name: newAgencyName.trim(),
-        company_id: companyId,
-      });
-      setAgencies((prev) => [agency, ...prev]);
-      setShowAddAgencyModal(false);
-      setNewAgencyName("");
-      router.refresh();
-    } catch (err: any) {
-      console.error("Error creating agency:", err);
-      setAgencyModalError(err.message || "Failed to add agency.");
-    } finally {
-      setCreatingAgency(false);
-    }
-  };
 
-  const handleDeleteAgency = (agencyId: string, agencyName: string) => {
-    alerts.showConfirm({
-      title: "Remove Agency",
-      message: `Are you sure you want to permanently remove "${agencyName}" from the agencies panel?`,
-      confirmLabel: "Remove Agency",
-      isDestructive: true,
-      onConfirm: async () => {
-        try {
-          await deleteAgency(accessToken, agencyId);
-          setAgencies((prev) => prev.filter((a) => a.id !== agencyId));
-          router.refresh();
-        } catch (err: any) {
-          console.error("Error deleting agency:", err);
-          alerts.showAlert({
-            title: "Error Removing Agency",
-            message: err.message || "Failed to remove agency.",
-            isDestructive: true,
-          });
-        }
-      },
-    });
-  };
 
   useEffect(() => {
     setSurveys(initialSurveys);
@@ -242,9 +203,7 @@ export default function DashboardClient({
     setProfiles(initialProfiles);
   }, [initialProfiles]);
 
-  useEffect(() => {
-    setAgencies(initialIgnoredAgencies);
-  }, [initialIgnoredAgencies]);
+
 
   // Sync with searchParams on load
   useEffect(() => {
@@ -430,6 +389,8 @@ export default function DashboardClient({
             filename={filename}
             surveyData={surveyData}
             accessToken={accessToken}
+            role={role}
+            companyId={companyId}
           />
         )}
       </div>
@@ -499,8 +460,8 @@ export default function DashboardClient({
             <button
               onClick={() => setActiveTab("surveys")}
               className={`px-md py-4 font-bold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${activeTab === "surveys"
-                  ? "text-primary border-primary"
-                  : "text-on-surface-variant border-transparent hover:text-on-surface"
+                ? "text-primary border-primary"
+                : "text-on-surface-variant border-transparent hover:text-on-surface"
                 }`}
             >
               <span className="material-symbols-outlined text-[20px]">upload_file</span>
@@ -509,22 +470,12 @@ export default function DashboardClient({
             <button
               onClick={() => setActiveTab("users")}
               className={`px-md py-4 font-bold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${activeTab === "users"
-                  ? "text-primary border-primary"
-                  : "text-on-surface-variant border-transparent hover:text-on-surface"
+                ? "text-primary border-primary"
+                : "text-on-surface-variant border-transparent hover:text-on-surface"
                 }`}
             >
               <span className="material-symbols-outlined text-[20px]">group</span>
               Users
-            </button>
-            <button
-              onClick={() => setActiveTab("agencies")}
-              className={`px-md py-4 font-bold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${activeTab === "agencies"
-                  ? "text-primary border-primary"
-                  : "text-on-surface-variant border-transparent hover:text-on-surface"
-                }`}
-            >
-              <span className="material-symbols-outlined text-[20px]">corporate_fare</span>
-              Agencies
             </button>
           </div>
         ) : null}
@@ -551,7 +502,7 @@ export default function DashboardClient({
             </div>
 
             {/* Stats Cards Preview */}
-            <div className={`grid grid-cols-1 gap-md mb-lg ${role === "admin" ? "md:grid-cols-3" : "md:grid-cols-1"}`}>
+            <div className={`grid grid-cols-1 gap-md mb-lg ${role === "admin" ? "md:grid-cols-2" : "md:grid-cols-1"}`}>
               <div className="glass-card p-md rounded-xl flex items-center gap-md">
                 <div className="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center text-secondary">
                   <span className="material-symbols-outlined">analytics</span>
@@ -563,19 +514,6 @@ export default function DashboardClient({
                   <h4 className="text-headline-md font-bold">{surveys.length}</h4>
                 </div>
               </div>
-              {role === "admin" && (
-                <div className="glass-card p-md rounded-xl flex items-center gap-md">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                    <span className="material-symbols-outlined">corporate_fare</span>
-                  </div>
-                  <div>
-                    <p className="text-label-sm font-label-sm text-on-surface-variant uppercase tracking-wider">
-                      Agencies
-                    </p>
-                    <h4 className="text-headline-md font-bold">{agencies.length}</h4>
-                  </div>
-                </div>
-              )}
               {role === "admin" && (
                 <div className="glass-card p-md rounded-xl flex items-center gap-md">
                   <div className="w-12 h-12 rounded-full bg-tertiary/10 flex items-center justify-center text-tertiary">
@@ -666,6 +604,24 @@ export default function DashboardClient({
                           </p>
                           <p className="text-label-md font-bold text-secondary">Ready</p>
                         </div>
+                        {role === "admin" && (
+                          <div className="col-span-2 bg-surface-container-low/50 p-2.5 rounded-lg border border-outline-variant/10 flex items-center justify-between">
+                            <div>
+                              <p className="text-[10px] text-on-surface-variant uppercase font-bold tracking-widest">
+                                Response Logging
+                              </p>
+                              <p className="text-label-md font-bold text-on-surface">
+                                {surveyLoggingStates[survey.id] ? "Active" : "Inactive"}
+                              </p>
+                            </div>
+                            <span className="relative flex h-2 w-2">
+                              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${surveyLoggingStates[survey.id] ? "bg-emerald-400" : "bg-white/20"
+                                }`}></span>
+                              <span className={`relative inline-flex rounded-full h-2 w-2 ${surveyLoggingStates[survey.id] ? "bg-emerald-500" : "bg-white/30"
+                                }`}></span>
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <div className="mt-auto flex items-center justify-between pt-md border-t border-outline-variant/10">
                         <span className="text-label-sm text-on-surface-variant">
@@ -727,8 +683,8 @@ export default function DashboardClient({
                       <td className="px-md py-5">
                         <span
                           className={`px-3 py-1 rounded-full text-[12px] font-bold uppercase tracking-tight ${profile.role === "admin"
-                              ? "bg-primary/20 text-primary"
-                              : "bg-secondary/20 text-secondary"
+                            ? "bg-primary/20 text-primary"
+                            : "bg-secondary/20 text-secondary"
                             }`}
                         >
                           {profile.role}
@@ -784,65 +740,7 @@ export default function DashboardClient({
           </div>
         )}
 
-        {role === "admin" && activeTab === "agencies" && (
-          <div className="glass-panel rim-light rounded-xl overflow-hidden shadow-2xl">
-            <div className="p-md border-b border-outline-variant/20 bg-white/5 flex flex-wrap items-center justify-between gap-md">
-              <div>
-                <h3 className="text-headline-md font-bold text-on-surface">Agencies Panel</h3>
-                <p className="text-on-surface-variant text-label-md">Configure research agency headers. Excel sheets processed in this company workspace will filter columns matching these agencies.</p>
-              </div>
-              <button
-                onClick={() => setShowAddAgencyModal(true)}
-                className="flex items-center gap-xs px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-xl text-primary font-bold text-label-md transition-all active:scale-95 cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-[20px]">add</span>
-                Add New Agency
-              </button>
-            </div>
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-white/5 border-b border-outline-variant/20">
-                  <th className="px-md py-4 font-label-md text-on-surface-variant">Agency Header</th>
-                  <th className="px-md py-4 font-label-md text-on-surface-variant">Date Configured</th>
-                  <th className="px-md py-4 font-label-md text-on-surface-variant">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-outline-variant/10">
-                {agencies.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="px-md py-8 text-center text-on-surface-variant">
-                      No agency headers configured for this workspace. All workbook columns will be processed.
-                    </td>
-                  </tr>
-                ) : (
-                  agencies.map((agency) => (
-                    <tr key={agency.id} className="hover:bg-white/5 transition-colors">
-                      <td className="px-md py-5 text-on-surface font-bold">
-                        {agency.agency_name}
-                      </td>
-                      <td className="px-md py-5 text-on-surface-variant font-label-md">
-                        {new Date(agency.created_at).toLocaleDateString("en-IN", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </td>
-                      <td className="px-md py-5">
-                        <button
-                          onClick={() => handleDeleteAgency(agency.id, agency.agency_name)}
-                          className="flex items-center gap-xs px-3 py-1.5 bg-error/15 border border-error/30 text-error hover:bg-error/25 rounded-lg text-xs font-semibold cursor-pointer transition-all active:scale-95"
-                        >
-                          <span className="material-symbols-outlined text-[16px]">delete</span>
-                          Remove
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+
         {showAddUserModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div className="glass-panel max-w-[448px] w-full p-gutter rounded-3xl border border-outline-variant/20 flex flex-col gap-md shadow-2xl relative animate-fade-in bg-[#131b2e]">
@@ -923,51 +821,7 @@ export default function DashboardClient({
             </div>
           </div>
         )}
-        {showAddAgencyModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="glass-panel max-w-[448px] w-full p-gutter rounded-3xl border border-outline-variant/20 flex flex-col gap-md shadow-2xl relative animate-fade-in bg-[#131b2e]">
-              <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">Add New Agency</h3>
-              <p className="text-body-md text-on-surface-variant">
-                Configure a new research agency header. Survey columns matching this name will be ignored during calculations.
-              </p>
-              {agencyModalError && (
-                <p className="text-label-sm text-error bg-error/15 border border-error/25 p-2 rounded-lg">
-                  {agencyModalError}
-                </p>
-              )}
-              <div className="flex flex-col gap-xs">
-                <label className="text-label-sm text-on-surface-variant font-bold">Agency Name / Header</label>
-                <input
-                  type="text"
-                  value={newAgencyName}
-                  onChange={(e) => setNewAgencyName(e.target.value)}
-                  placeholder="e.g. NIELSEN"
-                  className="px-4 py-2 bg-surface-container border border-outline-variant/30 rounded-lg text-on-surface focus:ring-1 focus:ring-primary outline-none text-sm"
-                />
-              </div>
-              <div className="flex justify-end gap-sm mt-md">
-                <button
-                  onClick={() => {
-                    setShowAddAgencyModal(false);
-                    setNewAgencyName("");
-                    setAgencyModalError(null);
-                  }}
-                  className="px-4 py-2 bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/20 rounded-xl text-label-md font-bold transition-all cursor-pointer"
-                  disabled={creatingAgency}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreateAgency}
-                  className="px-6 py-2 bg-primary text-on-primary hover:bg-primary/95 rounded-xl text-label-md font-bold transition-all cursor-pointer shadow-lg disabled:opacity-50"
-                  disabled={creatingAgency || !newAgencyName.trim()}
-                >
-                  {creatingAgency ? "Adding..." : "Add"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+
       </section>
 
       {/* Atmospheric BG effect */}

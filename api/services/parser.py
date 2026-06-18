@@ -130,14 +130,12 @@ def _parse_table_titles(workbook) -> dict[int, str]:
 
 def parse_excel_to_json(
     file_bytes: bytes,
-    ignored_agencies: set[str] | None = None,
 ) -> dict[str, Any]:
     """
     Parse an Excel survey workbook entirely in-memory and return structured JSON.
 
     Args:
         file_bytes: Raw bytes of the uploaded .xlsx/.xlsm file.
-        ignored_agencies: Set of agency column names to filter out (case-insensitive).
 
     Returns:
         Dict structured as:
@@ -151,11 +149,6 @@ def parse_excel_to_json(
             }
         }
     """
-    if ignored_agencies is None:
-        ignored_agencies = set()
-
-    # Normalize ignored agencies to uppercase for case-insensitive matching
-    ignored_upper = {a.upper() for a in ignored_agencies}
 
     # Open workbook in read-only mode from memory
     stream = BytesIO(file_bytes)
@@ -243,16 +236,10 @@ def parse_excel_to_json(
                     sub_str = str(sub).strip()
                     if sub_str.upper() == "TOTAL":
                         col_name = "Total"
-                    elif sub_str.upper() in ignored_upper:
-                        continue  # Skip ignored agency columns
                     elif current_parent:
                         col_name = f"{current_parent}: {sub_str}"
                     else:
                         col_name = sub_str
-
-                    # Check if the constructed column name should be ignored
-                    if col_name.upper() in ignored_upper:
-                        continue
 
                     column_headers[col_idx] = col_name
                 data_start_offset = 11
@@ -261,8 +248,6 @@ def parse_excel_to_json(
                 for col_idx, val in enumerate(break_row):
                     if val not in (None, ""):
                         col_name = str(val).strip()
-                        if col_name.upper() in ignored_upper:
-                            continue
                         column_headers[col_idx] = col_name
                 data_start_offset = (header_break_idx - start_idx) + 1
 
@@ -358,20 +343,10 @@ def get_parsed_survey_data(survey_row: dict, cfg) -> dict:
     survey_data = survey_row.get("survey_data", {})
     if isinstance(survey_data, dict) and "raw_file_b64" in survey_data:
         import base64
-        from services.supabase_client import get_supabase_client
         file_bytes = base64.b64decode(survey_data["raw_file_b64"])
-        company_id = survey_row.get("company_id")
-        supabase = get_supabase_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
-        agencies_result = (
-            supabase.table("ignored_agencies")
-            .select("agency_name")
-            .eq("company_id", company_id)
-            .execute()
-        )
-        ignored_agencies = {row["agency_name"] for row in (agencies_result.data or [])}
 
         # 4. Parse workbook
-        result = parse_excel_to_json(file_bytes, ignored_agencies)
+        result = parse_excel_to_json(file_bytes)
 
         # 5. Cache the result
         _cache_put(survey_id, result)

@@ -36,9 +36,12 @@ def upload_survey():
     if not file.filename:
         return jsonify({"error": "Empty filename"}), 400
 
-    filename = file.filename
-    if not filename.lower().endswith((".xlsx", ".xlsm")):
+    original_filename = file.filename
+    if not original_filename.lower().endswith((".xlsx", ".xlsm")):
         return jsonify({"error": "Only .xlsx and .xlsm files are supported."}), 400
+
+    import os
+    filename, _ = os.path.splitext(original_filename)
 
     # --- 2. Read file into memory ---
     file_bytes = file.read()
