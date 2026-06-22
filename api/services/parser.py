@@ -24,7 +24,7 @@ import xml.etree.ElementTree
 xml.etree.ElementTree.parse = defusedxml.ElementTree.parse
 xml.etree.ElementTree.iterparse = defusedxml.ElementTree.iterparse
 
-from python_calamine import CalamineWorkbook
+# python_calamine is imported dynamically inside parse_excel_to_json to allow openpyxl fallback
 
 logger = logging.getLogger(__name__)
 
@@ -94,21 +94,9 @@ def _sanitize_data(data: Any) -> Any:
     return data
 
 
-def _parse_table_titles(workbook) -> dict[int, str]:
-    """Extract table number → title mapping from the INDEX sheet."""
-    index_sheet_name = None
-    for name in workbook.sheet_names:
-        if name.upper() == "INDEX":
-            index_sheet_name = name
-            break
-
-    if not index_sheet_name:
-        return {}
-
+def _extract_titles_from_rows(rows: list[list[Any]]) -> dict[int, str]:
+    """Extract table number → title mapping from the INDEX sheet rows."""
     titles: dict[int, str] = {}
-    worksheet = workbook.get_sheet_by_name(index_sheet_name)
-    rows = worksheet.to_python()
-
     start_row = 3
     for r_idx, row in enumerate(rows, 1):
         if row and len(row) > 0 and row[0] and "Table" in str(row[0]):
@@ -133,6 +121,8 @@ def parse_excel_to_json(
 ) -> dict[str, Any]:
     """
     Parse an Excel survey workbook entirely in-memory and return structured JSON.
+    Uses Calamine as a primary high-performance parser, with an openpyxl fallback
+    for environments where Calamine is unavailable.
 
     Args:
         file_bytes: Raw bytes of the uploaded .xlsx/.xlsm file.
@@ -149,34 +139,78 @@ def parse_excel_to_json(
             }
         }
     """
+    table_titles = {}
+    rows = []
+    calamine_loaded = False
 
-    # Open workbook in read-only mode from memory
-    stream = BytesIO(file_bytes)
+    # 1. Try Calamine
     try:
-        workbook = CalamineWorkbook.from_filelike(stream)
+        from python_calamine import CalamineWorkbook
+        stream = BytesIO(file_bytes)
+        try:
+            workbook = CalamineWorkbook.from_filelike(stream)
+            index_sheet_name = None
+            for name in workbook.sheet_names:
+                if name.upper() == "INDEX":
+                    index_sheet_name = name
+                    break
 
-        # Find the TABLES sheet
-        tables_sheet_name = None
-        for name in workbook.sheet_names:
-            if name.upper() == "TABLES":
-                tables_sheet_name = name
-                break
+            if index_sheet_name:
+                index_rows = workbook.get_sheet_by_name(index_sheet_name).to_python()
+                table_titles = _extract_titles_from_rows(index_rows)
 
-        if not tables_sheet_name:
-            raise ValueError("Missing 'Tables' sheet in the workbook.")
+            tables_sheet_name = None
+            for name in workbook.sheet_names:
+                if name.upper() == "TABLES":
+                    tables_sheet_name = name
+                    break
+            if not tables_sheet_name:
+                raise ValueError("Missing 'Tables' sheet in the workbook.")
 
-        table_titles = _parse_table_titles(workbook)
-        worksheet = workbook.get_sheet_by_name(tables_sheet_name)
+            rows = workbook.get_sheet_by_name(tables_sheet_name).to_python()
+            workbook.close()
+            calamine_loaded = True
+        finally:
+            stream.close()
+    except Exception as e:
+        logger.warning(f"Calamine parser failed or unavailable: {e}. Falling back to openpyxl.")
 
-        # Simple row loading using Calamine's to_python()
-        rows = worksheet.to_python()
-        parsed_tables: dict[int, dict] = {}
+    # 2. Try openpyxl if Calamine failed
+    if not calamine_loaded:
+        import openpyxl
+        stream = BytesIO(file_bytes)
+        try:
+            workbook = openpyxl.load_workbook(stream, read_only=True, data_only=True)
+            index_sheet_name = None
+            for name in workbook.sheetnames:
+                if name.upper() == "INDEX":
+                    index_sheet_name = name
+                    break
 
-        # Find all table start positions
-        table_starts: list[tuple[str, int]] = []
-        for idx, row in enumerate(rows):
-            if row and row[0] and str(row[0]).startswith("Table "):
-                table_starts.append((row[0], idx))
+            if index_sheet_name:
+                index_rows = [list(r) for r in workbook[index_sheet_name].iter_rows(values_only=True)]
+                table_titles = _extract_titles_from_rows(index_rows)
+
+            tables_sheet_name = None
+            for name in workbook.sheetnames:
+                if name.upper() == "TABLES":
+                    tables_sheet_name = name
+                    break
+            if not tables_sheet_name:
+                raise ValueError("Missing 'Tables' sheet in the workbook.")
+
+            rows = [list(r) for r in workbook[tables_sheet_name].iter_rows(values_only=True)]
+            workbook.close()
+        finally:
+            stream.close()
+
+    parsed_tables: dict[int, dict] = {}
+
+    # Find all table start positions
+    table_starts: list[tuple[str, int]] = []
+    for idx, row in enumerate(rows):
+        if row and row[0] and str(row[0]).startswith("Table "):
+            table_starts.append((row[0], idx))
 
         for i, (table_num_str, start_idx) in enumerate(table_starts):
             match = re.match(r"Table\s*(\d+)", table_num_str, re.IGNORECASE)
@@ -310,12 +344,6 @@ def parse_excel_to_json(
                                 table_data[normalized_label] = base_data
 
             parsed_tables[table_num] = table_data
-
-        workbook.close()
-    finally:
-        # Destroy the file stream immediately
-        stream.close()
-        del stream
 
     # Build final output and sanitize NaN/Inf floats
     return _sanitize_data({
