@@ -30,7 +30,18 @@ def _generate_search_query(model, brand: str, industry: str, table_title: str, a
         "- Do not directly enter the any of the survey data or active columns, understand first and then create a highly optimized search engine query.\n"
         "- Output ONLY the final plain text search query. Do not include quotes, prefix text, or conversational filler.\n"
         "- Keep the query under 15 words.\n"
-        "- Focus on Indian market trends or competitor moves relevant to the topic."
+        "- Focus on Indian market trends or competitor moves relevant to the topic.\n"
+        # "if you see C1 to C8 in the question, each of them are cars from maruti suzuki. The actual cars are as follows:\n\n"
+        # "- C1:kei\n"
+        # "- C2:Kei 2\n"
+        # "- C3:Alto\n"
+        # "- C4:WagonR\n"
+        # "- C5:Eeco\n"
+        # "- C6:Swift\n"
+        # "- C7:Fronx\n"
+        # "- C8:Used Brezza\n"
+        # "Use these names if you see C1 to C8 in the question and columns.\n"
+        # "Replace the actual names with C1 to C8 in response."
     )
     try:
         messages = [HumanMessage(content=instruction)]
@@ -90,8 +101,19 @@ def generate_insights():
                 .limit(1) \
                 .execute()
             if cache_res.data:
-                logger.info(f"Insights cache hit for survey {survey_id}, table {table_id}, columns: {cols_hash}")
-                return jsonify({"insight": cache_res.data[0]["insights"]}), 200
+                cached_insights = cache_res.data[0]["insights"]
+                has_bad_reference = False
+                if isinstance(cached_insights, list):
+                    for item in cached_insights:
+                        ref = item.get("Data Reference", "")
+                        if "not shown" in str(ref).lower() or "other charts" in str(ref).lower():
+                            has_bad_reference = True
+                            break
+                if not has_bad_reference:
+                    logger.info(f"Insights cache hit for survey {survey_id}, table {table_id}, columns: {cols_hash}")
+                    return jsonify({"insight": cached_insights}), 200
+                else:
+                    logger.info(f"Insights cache hit but bypassed because it contains 'not shown' references: {cols_hash}")
         except Exception as ce:
             logger.warning(f"Failed to query insights cache: {ce}")
             
@@ -169,12 +191,13 @@ def generate_insights():
             "You are a Senior Strategic Market Research Consultant specializing in the {industry} sector ({primary_brand} landscape). "
             "You are analyzing survey chart data on the question '{table_title}' for '{company_name}'.\n\n"
             "Provide exactly 3 different, highly actionable, strategically deep, and market-specific insights. To ensure maximum strategic value, follow these rules:\n"
-            "1. Segment Comparison: Compare and contrast different demographic or segment columns (e.g., age groups, regions, tiers). Highlight anomalous differences or strong variances in response rates.\n"
-            "2. Competitive Positioning: If other brands are present in the columns or rows, analyze '{primary_brand}' relative strengths, weaknesses, opportunities, or threats against those competitors.\n"
-            "3. Deep Synthesis: Do not simply repeat or translate percentages (do not just state 'X is Y%'). Instead, synthesize the data points to explain the underlying consumer psychology, cultural nuances, or socioeconomic drivers unique to the market.\n"
+            "1. Segment Comparison: Compare and contrast the different columns/segments that are explicitly present in the provided chart table data. If specific demographics (like age groups, regions, zones) are not in the provided table, do not reference or invent them. Only compare segments that are explicitly visible in the table.\n"
+            "2. Competitive Positioning: If other brands are present in the columns or rows of the provided table, analyze '{primary_brand}' relative strengths, weaknesses, opportunities, or threats against those competitors.\n"
+            "3. Deep Synthesis: Do not simply repeat or translate percentages (do not just state 'X is Y%'). Instead, synthesize the visible data points to explain the underlying consumer psychology, cultural nuances, or socioeconomic drivers unique to the market.\n"
             "4. Actionable Takeaway: Each takeaway must be a concrete, tactical recommendation for {primary_brand} regarding product positioning, marketing messaging, or distribution strategy.\n"
             "5. Real-Time Relevance: Synthesize any provided current market news context with the survey chart data to make the takeaways highly relevant to the brand's current market position.\n"
-            "6. Strict Label Adherence: Never assume or guess the meaning of abstract codes or labels (such as 'C1', 'C2', 'C6', 'S1', etc.). Refer to them strictly by their exact name in the data (e.g., 'Group C1', 'Segment C6'). Do not assign geographic regions (like North or South Zone), age groups, or other meanings to these labels unless they are explicitly named so in the data.\n\n"
+            "6. Strict Visible Data Constraint: Analyze ONLY the provided chart data. Never invent, assume, or reference any external survey data, other charts, or unseen columns/percentages. If a data point or segment is not in the table, it does not exist for this analysis. Never output 'Data not shown' or 'analysis of other charts' — every single insight and takeaway must be backed directly by the visible numbers. All supporting numbers in 'Data Reference' must come strictly from the provided table.\n"
+            "7. Strict Label Adherence: Never assume or guess the meaning of abstract codes or labels (such as 'C1', 'C2', 'C6', 'S1', etc.). Refer to them strictly by their exact name in the data (e.g., 'Group C1', 'Segment C6'). Do not assign geographic regions (like North or South Zone), age groups, or other meanings to these labels unless they are explicitly named so in the data.\n"
             "You must output your response ONLY as a valid JSON array of exactly 3 objects. Do not include any introductory text, markdown block wraps (like ```json), or conversational filler.\n"
             "IMPORTANT: Inside the JSON string values, do not use double quotes. Use single quotes if you need to quote something. Ensure all string values are strictly single-line and do not contain raw newlines. The JSON array must conform to the following schema:\n"
             "[\n"

@@ -1009,7 +1009,7 @@ export default function ChartViewer({
             <div className="p-gutter space-y-md bg-surface-container-low/30">
               {!insightContent && !generatingInsights && !insightError && (
                 <div className="flex flex-col items-center justify-center py-lg text-center">
-                  <p className="text-on-surface-variant text-sm max-w-md">
+                  <p className="text-on-surface-variant text-sm max-w-xxl">
                     {activeColumns.length === 0
                       ? "Select one or more columns/groups in the sidebar to auto-generate strategic insights."
                       : "No insights found."}
