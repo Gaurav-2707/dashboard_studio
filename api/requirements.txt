@@ -8,3 +8,6 @@ defusedxml==0.7.1
 python-dotenv==1.0.1
 python-calamine==0.6.2
 gotrue==2.12.4
+langchain-openai==1.3.2
+langchain-core==1.4.7
+requests==2.34.2
