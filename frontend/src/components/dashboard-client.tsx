@@ -64,20 +64,7 @@ export default function DashboardClient({
   const [surveys, setSurveys] = useState(initialSurveys);
   const [profiles, setProfiles] = useState(initialProfiles);
 
-  // Track logging states (Save to DB) for each survey
-  const [surveyLoggingStates, setSurveyLoggingStates] = useState<Record<string, boolean>>({});
 
-  // Load logging status for surveys from localStorage
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const states: Record<string, boolean> = {};
-      surveys.forEach((survey: any) => {
-        const stored = localStorage.getItem(`dashify_save_insights_${survey.id}`);
-        states[survey.id] = stored === "true";
-      });
-      setSurveyLoggingStates(states);
-    }
-  }, [surveys, activeSurveyId]);
 
   // Modal and user creation states
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -604,24 +591,7 @@ export default function DashboardClient({
                           </p>
                           <p className="text-label-md font-bold text-secondary">Ready</p>
                         </div>
-                        {role === "admin" && (
-                          <div className="col-span-2 bg-surface-container-low/50 p-2.5 rounded-lg border border-outline-variant/10 flex items-center justify-between">
-                            <div>
-                              <p className="text-[10px] text-on-surface-variant uppercase font-bold tracking-widest">
-                                Response Logging
-                              </p>
-                              <p className="text-label-md font-bold text-on-surface">
-                                {surveyLoggingStates[survey.id] ? "Active" : "Inactive"}
-                              </p>
-                            </div>
-                            <span className="relative flex h-2 w-2">
-                              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${surveyLoggingStates[survey.id] ? "bg-emerald-400" : "bg-white/20"
-                                }`}></span>
-                              <span className={`relative inline-flex rounded-full h-2 w-2 ${surveyLoggingStates[survey.id] ? "bg-emerald-500" : "bg-white/30"
-                                }`}></span>
-                            </span>
-                          </div>
-                        )}
+
                       </div>
                       <div className="mt-auto flex items-center justify-between pt-md border-t border-outline-variant/10">
                         <span className="text-label-sm text-on-surface-variant">

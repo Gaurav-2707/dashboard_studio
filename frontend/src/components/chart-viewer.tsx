@@ -233,28 +233,6 @@ export default function ChartViewer({
   const [showCustomization, setShowCustomization] = useState(false);
   const [showTablePreview, setShowTablePreview] = useState(false);
 
-  const [saveToCache, setSaveToCache] = useState(() => {
-    if (typeof window !== "undefined" && surveyId) {
-      const stored = localStorage.getItem(`dashify_save_insights_${surveyId}`);
-      return stored ? stored === "true" : false;
-    }
-    return false;
-  });
-
-  const handleSaveToCacheChange = (checked: boolean) => {
-    setSaveToCache(checked);
-    if (typeof window !== "undefined" && surveyId) {
-      localStorage.setItem(`dashify_save_insights_${surveyId}`, String(checked));
-    }
-  };
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && surveyId) {
-      const stored = localStorage.getItem(`dashify_save_insights_${surveyId}`);
-      setSaveToCache(stored ? stored === "true" : false);
-    }
-  }, [surveyId]);
-
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
@@ -329,7 +307,7 @@ export default function ChartViewer({
         table_id: selectedTableId,
         chart_type: chartType,
         active_columns: cols,
-        save_to_cache: saveToCache,
+        save_to_cache: true,
       });
       setInsightContent(data.insight);
     } catch (err: any) {
@@ -338,7 +316,7 @@ export default function ChartViewer({
     } finally {
       setGeneratingInsights(false);
     }
-  }, [accessToken, surveyId, selectedTableId, chartType, activeColumns, saveToCache]);
+  }, [accessToken, surveyId, selectedTableId, chartType, activeColumns]);
 
   // Auto-fetch insights when question selection or active columns change
   useEffect(() => {
@@ -610,31 +588,7 @@ export default function ChartViewer({
         </datalist>
       </div>
 
-      {role === "admin" && (
-        <div className="p-3 bg-surface-container-high/40 hover:bg-surface-container-high/60 rounded-xl border border-outline-variant/10 transition-all space-y-2">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-label-md font-bold text-on-surface">Save responses to DB</span>
-              <span className="text-[10px] text-on-surface-variant leading-tight max-w-[170px]">
-                Toggle response logging
-              </span>
-            </div>
-            <button
-              onClick={() => handleSaveToCacheChange(!saveToCache)}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none focus:ring-1 focus:ring-primary/40 ${saveToCache ? "bg-emerald-500" : "bg-white/10"
-                }`}
-              type="button"
-              role="switch"
-              aria-checked={saveToCache}
-            >
-              <span
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${saveToCache ? "translate-x-5" : "translate-x-0"
-                  }`}
-              />
-            </button>
-          </div>
-        </div>
-      )}
+
 
       {/* Top Breaks Comparison */}
       <div className="space-y-sm pt-2">
