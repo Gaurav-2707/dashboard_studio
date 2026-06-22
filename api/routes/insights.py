@@ -55,12 +55,11 @@ def generate_insights():
     table_id = data.get("table_id")
     chart_type = data.get("chart_type")
     active_columns = data.get("active_columns", [])
-    save_to_cache = data.get("save_to_cache", True)
 
     if not survey_id or not table_id:
         return jsonify({"error": "survey_id and table_id are required"}), 400
     
-    logger.info(f"Generating insights for user {user_id} (Role: {role}) on table {table_id} (save_to_cache: {save_to_cache})")
+    logger.info(f"Generating insights for user {user_id} (Role: {role}) on table {table_id}")
 
     try:
         from services.supabase_client import get_supabase_client
@@ -180,7 +179,7 @@ def generate_insights():
             "IMPORTANT: Inside the JSON string values, do not use double quotes. Use single quotes if you need to quote something. Ensure all string values are strictly single-line and do not contain raw newlines. The JSON array must conform to the following schema:\n"
             "[\n"
             "  {{\n"
-            '    "Topic": "Brief label of the analyzed segment/topic(all topic names should be different)",\n'
+            '    "Topic": "Brief label of the analyzed segment/topic(all topic names should be different) (3-4 words)",\n'
             '    "Insight": "Synthesis of consumer psychology, segment variances, and competitive dynamics behind the data (1-2 sentences).",\n'
             '    "Takeaway": "Actionable strategic recommendation (SWOT/positioning) for {primary_brand} (1-2 sentences).",\n'
             '    "Data Reference": "Specific supporting percentages/bases cited from the data."\n'
@@ -221,20 +220,17 @@ def generate_insights():
         # ----------------------------------------------------------------------
         # Caching Layer: Write the new insights to cache (Upserting on conflict)
         # ----------------------------------------------------------------------
-        if save_to_cache:
-            try:
-                supabase.table("insights_cache").upsert({
-                    "survey_id": survey_id,
-                    "table_id": str(table_id),
-                    "active_columns": active_columns,
-                    "active_columns_hash": cols_hash,
-                    "insights": insights_array
-                }, on_conflict="survey_id,table_id,active_columns_hash").execute()
-                logger.info(f"Insights cached successfully for survey {survey_id}, table {table_id}, columns: {cols_hash}")
-            except Exception as ce:
-                logger.warning(f"Failed to write to insights cache: {ce}")
-        else:
-            logger.info(f"Skipping database cache write for survey {survey_id}, table {table_id} (save_to_cache is False)")
+        try:
+            supabase.table("insights_cache").upsert({
+                "survey_id": survey_id,
+                "table_id": str(table_id),
+                "active_columns": active_columns,
+                "active_columns_hash": cols_hash,
+                "insights": insights_array
+            }, on_conflict="survey_id,table_id,active_columns_hash").execute()
+            logger.info(f"Insights cached successfully for survey {survey_id}, table {table_id}, columns: {cols_hash}")
+        except Exception as ce:
+            logger.warning(f"Failed to write to insights cache: {ce}")
 
         return jsonify({"insight": insights_array}), 200
 
