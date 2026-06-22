@@ -31,17 +31,6 @@ def _generate_search_query(model, brand: str, industry: str, table_title: str, a
         "- Output ONLY the final plain text search query. Do not include quotes, prefix text, or conversational filler.\n"
         "- Keep the query under 15 words.\n"
         "- Focus on Indian market trends or competitor moves relevant to the topic.\n"
-        # "if you see C1 to C8 in the question, each of them are cars from maruti suzuki. The actual cars are as follows:\n\n"
-        # "- C1:kei\n"
-        # "- C2:Kei 2\n"
-        # "- C3:Alto\n"
-        # "- C4:WagonR\n"
-        # "- C5:Eeco\n"
-        # "- C6:Swift\n"
-        # "- C7:Fronx\n"
-        # "- C8:Used Brezza\n"
-        # "Use these names if you see C1 to C8 in the question and columns.\n"
-        # "Replace the actual names with C1 to C8 in response."
     )
     try:
         messages = [HumanMessage(content=instruction)]

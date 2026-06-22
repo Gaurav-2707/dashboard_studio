@@ -226,8 +226,8 @@ export default function ChartViewer({
   const [axisLabel, setAxisLabel] = useState("Percentage");
   const [paletteName, setPaletteName] = useState("Default");
   const [chartSizeName, setChartSizeName] = useState<"Small" | "Medium" | "Large">("Medium");
-  const [showLabels, setShowLabels] = useState(false);
-  const [roundValues, setRoundValues] = useState(false);
+  const [showLabels, setShowLabels] = useState(true);
+  const [roundValues, setRoundValues] = useState(true);
   const [showGridlines, setShowGridlines] = useState(true);
   const [labelRotation, setLabelRotation] = useState(35);
   const [showCustomization, setShowCustomization] = useState(false);
