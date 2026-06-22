@@ -1,0 +1,43 @@
+# Dependency folders
+node_modules/
+frontend/node_modules/
+api/venv/
+api/__pycache__/
+api/routes/__pycache__/
+api/services/__pycache__/
+api/tests/__pycache__/
+.pytest_cache/
+
+# Environment secrets
+api/.env
+frontend/.env.local
+.env.local
+
+# Logs and debug files
+api/error.log
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Next.js build output
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/coverage/
+
+# Vercel & Yarn specific
+frontend/.vercel/
+.vercel/
+.pnp
+.pnp.*
+.yarn/
+
+# IDE / OS specific files
+.DS_Store
+.vscode/
+.idea/
+*.tsbuildinfo
+frontend/next-env.d.ts
+*.pem
