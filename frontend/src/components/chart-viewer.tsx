@@ -233,8 +233,6 @@ export default function ChartViewer({
   const [showCustomization, setShowCustomization] = useState(false);
   const [showTablePreview, setShowTablePreview] = useState(false);
 
-
-
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
