@@ -52,7 +52,7 @@ export default function DeleteSurveyButton({
     <button
       onClick={handleDelete}
       disabled={deleting}
-      className="p-2 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-all inline-flex items-center z-10 cursor-pointer"
+      className="p-2 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-all inline-flex items-center z-10 cursor-pointer !shadow-none"
       title="Delete Survey"
     >
       <span className="material-symbols-outlined text-[20px]">

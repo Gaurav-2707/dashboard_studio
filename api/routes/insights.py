@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 insights_bp = Blueprint("insights", __name__)
 
-def _generate_search_query(model, brand: str, industry: str, table_title: str, active_columns: list, table_markdown: str) -> str:
+def _generate_search_query(model, brand: str, industry: str, table_title: str, active_columns: list, table_markdown: str, admin_context: str = "") -> str:
     """
     Use ChatOpenAI to generate a search-engine-optimized query based on the brand,
     industry, specific question/table title, active columns, and survey data.
@@ -24,24 +24,16 @@ def _generate_search_query(model, brand: str, industry: str, table_title: str, a
         f"Table Title: '{table_title}'\n"
         f"Brand/Company: '{brand}'\n"
         f"Industry: '{industry}'\n"
-        f"Analyzed Segments/Active Columns: '{cols_str}'\n\n"
-        f"Survey Table Data:\n{table_markdown}\n\n"
-        "Rules:\n"
+        f"Analyzed Segments/Active Columns: '{cols_str}'\n"
+    )
+    if admin_context:
+        instruction += f"Additional Admin-Provided Context: '{admin_context}'\n"
+    instruction += (
+        "\nRules:\n"
         "- Do not directly enter the any of the survey data or active columns, understand first and then create a highly optimized search engine query.\n"
         "- Output ONLY the final plain text search query. Do not include quotes, prefix text, or conversational filler.\n"
         "- Keep the query under 15 words.\n"
         "- Focus on Indian market trends or competitor moves relevant to the topic.\n"
-        # "if you see C1 to C8 in the question, each of them are cars from maruti suzuki. The actual cars are as follows:\n\n"
-        # "- C1:kei\n"
-        # "- C2:Kei 2\n"
-        # "- C3:Alto\n"
-        # "- C4:WagonR\n"
-        # "- C5:Eeco\n"
-        # "- C6:Swift\n"
-        # "- C7:Fronx\n"
-        # "- C8:Used Brezza\n"
-        # "Use these names if you see C1 to C8 in the question and columns.\n"
-        # "Replace the actual names with C1 to C8 in response."
     )
     try:
         messages = [HumanMessage(content=instruction)]
@@ -87,6 +79,15 @@ def generate_insights():
         result = query.limit(1).execute()
         if not result.data:
             return jsonify({"error": "survey not found or access denied"}), 404
+
+        # Fetch admin-entered context if any
+        admin_context = ""
+        try:
+            context_res = supabase.table("survey_contexts").select("context").eq("survey_id", survey_id).limit(1).execute()
+            if context_res.data:
+                admin_context = context_res.data[0].get("context", "").strip()
+        except Exception as ce:
+            logger.warning(f"Failed to fetch survey context: {ce}")
 
         # ----------------------------------------------------------------------
         # Caching Layer: Check if insights exist in cache
@@ -184,7 +185,7 @@ def generate_insights():
         primary_brand = company_name
 
         # Generate search query dynamically and fetch context
-        dynamic_query = _generate_search_query(model, primary_brand, industry, table_title, cols_to_use, table_markdown)
+        dynamic_query = _generate_search_query(model, primary_brand, industry, table_title, cols_to_use, table_markdown, admin_context)
         market_context = search_market_context(dynamic_query)
 
         system_prompt = (
@@ -220,10 +221,11 @@ def generate_insights():
         logger.info(f"Tavily Search Query: '{dynamic_query}'")
         logger.info(f"Tavily Search Results:\n{market_context}")
 
+        admin_context_str = f"Additional Context for this Survey (from Admin):\n{admin_context}\n\n" if admin_context else ""
         context_str = f"Current Market Context (Web Search):\n{market_context}\n\n" if market_context else ""
         messages = [
             SystemMessage(content=system_prompt_formatted),
-            HumanMessage(content=f"{context_str}Here is the chart data:\n{table_markdown}")
+            HumanMessage(content=f"{admin_context_str}{context_str}Here is the chart data:\n{table_markdown}")
         ]
 
 
@@ -260,3 +262,70 @@ def generate_insights():
     except Exception as e:
         logger.exception("Error generating insights")
         return jsonify({"error": "Failed to generate insights: " + str(e)}), 500
+
+
+@insights_bp.route("/surveys/<survey_id>/context", methods=["GET"])
+@require_auth()
+def get_survey_context(survey_id):
+    try:
+        from services.supabase_client import get_supabase_client
+        cfg = current_app.config["DASHIFY_CONFIG"]
+        supabase = get_supabase_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
+
+        # Verify survey access
+        survey_query = supabase.table("parsed_surveys").select("id, company_id").eq("id", survey_id)
+        if g.role != "admin":
+            survey_query = survey_query.eq("company_id", g.company_id)
+        
+        survey_res = survey_query.limit(1).execute()
+        if not survey_res.data:
+            return jsonify({"error": "Survey not found or access denied"}), 404
+
+        # Fetch context
+        context_res = supabase.table("survey_contexts").select("context").eq("survey_id", survey_id).limit(1).execute()
+        
+        context_text = ""
+        if context_res.data:
+            context_text = context_res.data[0].get("context", "")
+
+        return jsonify({"context": context_text}), 200
+    except Exception as e:
+        logger.exception("Error getting survey context")
+        return jsonify({"error": str(e)}), 500
+
+
+@insights_bp.route("/surveys/<survey_id>/context", methods=["POST"])
+@require_auth(allowed_roles=["admin"])
+def save_survey_context(survey_id):
+    data = request.get_json() or {}
+    context_text = data.get("context", "").strip()
+
+    try:
+        from services.supabase_client import get_supabase_client
+        cfg = current_app.config["DASHIFY_CONFIG"]
+        supabase = get_supabase_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
+
+        # Verify survey exists
+        survey_res = supabase.table("parsed_surveys").select("id").eq("id", survey_id).limit(1).execute()
+        if not survey_res.data:
+            return jsonify({"error": "Survey not found"}), 404
+
+        # Upsert context
+        import datetime
+        supabase.table("survey_contexts").upsert({
+            "survey_id": survey_id,
+            "context": context_text,
+            "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
+        }).execute()
+
+        # Clear cached insights for this survey because context has changed
+        try:
+            supabase.table("insights_cache").delete().eq("survey_id", survey_id).execute()
+            logger.info(f"Cleared insights cache for survey {survey_id} due to context update.")
+        except Exception as ce:
+            logger.warning(f"Failed to clear insights cache for survey {survey_id}: {ce}")
+
+        return jsonify({"success": True}), 200
+    except Exception as e:
+        logger.exception("Error saving survey context")
+        return jsonify({"error": str(e)}), 500

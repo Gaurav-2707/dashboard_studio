@@ -133,7 +133,7 @@ export async function enrollTOTP(): Promise<{
 
   const { data, error } = await supabase.auth.mfa.enroll({
     factorType: "totp",
-    friendlyName: "Dashify Authenticator",
+    friendlyName: "PValue Analytics Authenticator",
   });
 
   if (error) {

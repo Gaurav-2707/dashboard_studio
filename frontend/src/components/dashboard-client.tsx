@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { getSurvey, createUser, deleteUser } from "@/lib/flask-api";
+import { getSurvey, createUser, deleteUser, getSurveyContext, saveSurveyContext } from "@/lib/flask-api";
 import { signOut } from "@/actions/auth";
 import SurveyUpload from "@/components/survey-upload";
 import DeleteSurveyButton from "@/components/delete-survey-button";
@@ -42,6 +42,53 @@ export default function DashboardClient({
   const [error, setError] = useState<string | null>(null);
 
   const alerts = useAlerts();
+
+  // Survey Context States
+  const [showContextModal, setShowContextModal] = useState(false);
+  const [contextSurveyId, setContextSurveyId] = useState<string | null>(null);
+  const [contextSurveyFilename, setContextSurveyFilename] = useState<string>("");
+  const [contextValue, setContextValue] = useState<string>("");
+  const [loadingContext, setLoadingContext] = useState(false);
+  const [savingContext, setSavingContext] = useState(false);
+  const [contextError, setContextError] = useState<string | null>(null);
+
+  const handleOpenContextModal = async (surveyId: string, filename: string) => {
+    setContextSurveyId(surveyId);
+    setContextSurveyFilename(filename);
+    setContextValue("");
+    setContextError(null);
+    setLoadingContext(true);
+    setShowContextModal(true);
+    try {
+      const data = await getSurveyContext(accessToken, surveyId);
+      setContextValue(data.context || "");
+    } catch (err: any) {
+      console.error("Error loading survey context:", err);
+      setContextError(err.message || "Failed to load context.");
+    } finally {
+      setLoadingContext(false);
+    }
+  };
+
+  const handleSaveContext = async () => {
+    if (!contextSurveyId) return;
+    setSavingContext(true);
+    setContextError(null);
+    try {
+      await saveSurveyContext(accessToken, contextSurveyId, contextValue);
+      setShowContextModal(false);
+      alerts.showAlert({
+        title: "Success",
+        message: "Survey context updated successfully. Any cached insights for this survey have been invalidated.",
+        isDestructive: false,
+      });
+    } catch (err: any) {
+      console.error("Error saving survey context:", err);
+      setContextError(err.message || "Failed to save context.");
+    } finally {
+      setSavingContext(false);
+    }
+  };
 
   // Tab states (for admins only)
   const [activeTab, setActiveTab] = useState<"surveys" | "users">("surveys");
@@ -393,7 +440,7 @@ export default function DashboardClient({
             href={role === "admin" ? "/admin" : `/dashboard/${companyId}`}
             className="font-headline-md text-headline-md font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity cursor-pointer"
           >
-            dashify
+            PValue Analytics
           </Link>
           <span className="text-outline-variant/60 text-headline-md font-light">/</span>
           <h2 className="font-headline-md text-headline-md font-medium text-on-surface">
@@ -492,7 +539,7 @@ export default function DashboardClient({
             <div className={`grid grid-cols-1 gap-md mb-lg ${role === "admin" ? "md:grid-cols-2" : "md:grid-cols-1"}`}>
               <div className="glass-card p-md rounded-xl flex items-center gap-md">
                 <div className="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center text-secondary">
-                  <span className="material-symbols-outlined">analytics</span>
+                  <span className="material-symbols-outlined">chart_data</span>
                 </div>
                 <div>
                   <p className="text-label-sm font-label-sm text-on-surface-variant uppercase tracking-wider">
@@ -553,7 +600,19 @@ export default function DashboardClient({
                       id={`survey-card-${survey.id}`}
                     >
                       {role === "admin" && (
-                        <div className="absolute top-4 right-4 flex items-center gap-2">
+                        <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenContextModal(survey.id, survey.filename);
+                            }}
+                            className="p-2 text-on-surface-variant hover:bg-primary/20 hover:text-primary rounded-lg transition-all inline-flex items-center z-10 cursor-pointer !shadow-none"
+                            title="Edit Survey Context"
+                          >
+                            <span className="material-symbols-outlined text-[20px]">
+                              edit_note
+                            </span>
+                          </button>
                           <DeleteSurveyButton
                             surveyId={survey.id}
                             companyId={companyId}
@@ -562,7 +621,7 @@ export default function DashboardClient({
                           />
                         </div>
                       )}
-                      <div className="flex items-center gap-sm mb-md pr-12">
+                      <div className="flex items-center gap-sm mb-md pr-24">
                         <div className="p-2 bg-surface-container-highest rounded-lg text-primary">
                           <span className="material-symbols-outlined">description</span>
                         </div>
@@ -740,7 +799,7 @@ export default function DashboardClient({
                     <button
                       type="button"
                       onClick={handleGeneratePassword}
-                      className="text-[11px] text-primary hover:text-indigo-400 transition-colors font-bold cursor-pointer"
+                      className="text-[11px] text-primary hover:text-primary-container transition-colors font-bold cursor-pointer"
                     >
                       Generate Password
                     </button>
@@ -786,6 +845,73 @@ export default function DashboardClient({
                   disabled={creatingUser || !newUserEmail || !newUserPassword}
                 >
                   {creatingUser ? "Creating..." : "Create"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showContextModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="glass-panel max-w-[500px] w-full p-gutter rounded-3xl border border-outline-variant/20 flex flex-col gap-md shadow-2xl relative bg-[#131b2e]">
+              <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface flex items-center gap-xs">
+                <span className="material-symbols-outlined text-primary text-[24px]">edit_note</span>
+                Edit Survey Context
+              </h3>
+
+              <div className="text-body-md text-on-surface-variant">
+                Context for: <strong className="text-on-surface">{contextSurveyFilename}</strong>
+              </div>
+
+              <p className="text-label-sm text-on-surface-variant/80 leading-relaxed">
+                Provide custom instructions, domain rules, or brand context for this survey. This text is fed to the search query generator and the AI insights generator.
+              </p>
+
+              {contextError && (
+                <p className="text-label-sm text-error bg-error/15 border border-error/25 p-2 rounded-lg">
+                  {contextError}
+                </p>
+              )}
+
+              <div className="flex flex-col gap-xs">
+                <label className="text-label-sm text-on-surface-variant font-bold flex justify-between">
+                  <span>Context / Instructions</span>
+                  {loadingContext && <span className="text-primary animate-pulse font-normal">Loading...</span>}
+                </label>
+                <textarea
+                  value={contextValue}
+                  onChange={(e) => setContextValue(e.target.value)}
+                  placeholder="e.g. Focus on competitor launches in Indian fintech space. The target audience is urban youth aged 18-25."
+                  className="w-full h-32 px-4 py-3 bg-surface-container border border-outline-variant/30 rounded-lg text-on-surface focus:ring-1 focus:ring-primary outline-none text-sm resize-none placeholder:text-on-surface-variant/40"
+                  disabled={loadingContext || savingContext}
+                />
+              </div>
+
+              <div className="flex justify-end gap-sm mt-md">
+                <button
+                  onClick={() => {
+                    setShowContextModal(false);
+                    setContextSurveyId(null);
+                    setContextError(null);
+                  }}
+                  className="px-4 py-2 bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/20 rounded-xl text-label-md font-bold transition-all cursor-pointer"
+                  disabled={savingContext}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveContext}
+                  className="px-6 py-2 bg-primary text-on-primary hover:bg-primary/95 rounded-xl text-label-md font-bold transition-all cursor-pointer shadow-lg disabled:opacity-50 flex items-center gap-xs"
+                  disabled={loadingContext || savingContext}
+                >
+                  {savingContext ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-on-primary/20 border-t-on-primary rounded-full animate-spin"></span>
+                      Saving...
+                    </>
+                  ) : (
+                    "Save Context"
+                  )}
                 </button>
               </div>
             </div>
