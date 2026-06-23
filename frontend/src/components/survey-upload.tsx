@@ -90,7 +90,7 @@ export default function SurveyUpload({ companyId, onUploadSuccess }: SurveyUploa
       <button
         onClick={() => fileInputRef.current?.click()}
         disabled={uploading}
-        className="px-6 py-3 rounded-xl primary-gradient text-on-primary-container font-bold text-label-md flex items-center gap-xs shadow-xl shadow-primary/10 hover:shadow-primary/20 active:scale-95 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+        className="px-6 py-3 rounded-xl primary-gradient text-on-primary-container font-bold text-label-md flex items-center gap-xs shadow-xl shadow-primary/10 hover:shadow-[0_0_20px_rgba(245,158,11,0.3)] hover:scale-[1.02] hover:brightness-115 active:scale-95 transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
         id="upload-survey-btn"
       >
         {uploading ? (
