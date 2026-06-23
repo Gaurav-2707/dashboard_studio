@@ -666,7 +666,7 @@ export default function ChartViewer({
           onClick={() =>
             setGroups([...groups, []])
           }
-          className="w-full py-2 border border-dashed border-primary/45 rounded-lg text-primary text-label-md flex items-center justify-center gap-1 hover:bg-primary/10 transition-colors cursor-pointer"
+          className="w-full py-2 border border-dashed border-primary/45 rounded-lg text-primary text-label-md flex items-center justify-center gap-1 hover:bg-primary/10 transition-colors cursor-pointer !shadow-none"
         >
           <span className="material-symbols-outlined text-[16px]">add</span>
           Add Top Break Group
