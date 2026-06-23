@@ -619,14 +619,14 @@ export default function ChartViewer({
               </div>
               <div className="flex flex-wrap gap-1.5 mb-1.5">
                 {group.map((col) => (
-                  <span key={col} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-500/15 border border-indigo-500/25 text-indigo-300">
+                  <span key={col} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 border border-primary/20 text-primary">
                     {col.length > 20 ? col.slice(0, 18) + "..." : col}
                     <button
                       onClick={() => {
                         const newCols = group.filter((c) => c !== col);
                         handleGroupChange(idx, newCols);
                       }}
-                      className="hover:text-red-400 text-[10px] font-bold cursor-pointer ml-1 text-indigo-300"
+                      className="hover:text-red-400 text-[10px] font-bold cursor-pointer ml-1 text-primary"
                     >
                       ✕
                     </button>
@@ -1029,7 +1029,7 @@ export default function ChartViewer({
                   <p className="text-sm text-error font-medium">{insightError}</p>
                   <button
                     onClick={() => fetchAIInsights()}
-                    className="text-xs text-primary hover:text-indigo-400 font-bold self-start cursor-pointer"
+                    className="text-xs text-primary hover:text-primary-container font-bold self-start cursor-pointer"
                   >
                     Try Again
                   </button>

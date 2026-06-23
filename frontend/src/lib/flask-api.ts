@@ -206,5 +206,30 @@ export async function getAIInsights(
   });
 }
 
+/**
+ * Fetch context for a survey.
+ */
+export async function getSurveyContext(
+  token: string,
+  surveyId: string
+): Promise<{ context: string }> {
+  return apiFetch(`/api/surveys/${surveyId}/context`, token, { method: "GET" });
+}
+
+/**
+ * Save/update context for a survey (admin only).
+ */
+export async function saveSurveyContext(
+  token: string,
+  surveyId: string,
+  context: string
+): Promise<{ success: boolean }> {
+  return apiFetch(`/api/surveys/${surveyId}/context`, token, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ context }),
+  });
+}
+
 export { FlaskAPIError };
 

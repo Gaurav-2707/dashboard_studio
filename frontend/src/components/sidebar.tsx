@@ -60,15 +60,15 @@ export default function Sidebar({
               className="material-symbols-outlined text-on-primary-container"
               style={{ fontVariationSettings: "'FILL' 1" }}
             >
-              insights
+              analytics
             </span>
           </div>
           <h1 className="font-headline-md text-headline-md font-bold text-primary tracking-tight">
-            Dashify
+            PValue Analytics
           </h1>
         </Link>
         <p className="text-label-sm font-label-sm text-on-surface-variant mt-1 opacity-70">
-          Enterprise Analytics
+          Dashboard Studio
         </p>
       </div>
 

@@ -81,13 +81,13 @@ export default function AdminPage() {
   return (
     <div className="relative min-h-screen">
       {/* TopAppBar */}
-      <header className="fixed top-0 left-0 w-full h-16 bg-surface-dim/80 backdrop-blur-md border-b border-outline-variant/10 z-40 flex items-center justify-between px-gutter">
+      <header className="fixed top-0 right-0 w-[calc(100%-300px)] h-16 bg-surface-dim/80 backdrop-blur-md border-b border-outline-variant/10 z-40 flex items-center justify-between px-gutter">
         <div className="flex items-center gap-4">
           <Link
             href="/admin"
             className="font-headline-md text-headline-md font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity cursor-pointer"
           >
-            dashify
+            PValue Analytics
           </Link>
           <span className="text-outline-variant/60 text-headline-md font-light">/</span>
           <h2 className="font-headline-md text-headline-md font-medium text-on-surface">
