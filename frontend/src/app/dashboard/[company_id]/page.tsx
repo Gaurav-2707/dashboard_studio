@@ -37,7 +37,7 @@ export default async function SurveysPage({ params }: SurveysPageProps) {
   ]);
 
   const companyName = companyResult.data?.name || "Unknown";
-  const role = (profileResult.data?.role as "admin" | "analyst") || "analyst";
+  const role = (profileResult.data?.role as "admin" | "client_admin" | "analyst") || "analyst";
 
   // 4. Fetch lists based on role permissions
   let surveys: any[] = [];
@@ -51,8 +51,8 @@ export default async function SurveysPage({ params }: SurveysPageProps) {
     .order("uploaded_at", { ascending: false });
   surveys = surveysData || [];
 
-  // If admin, fetch full users data for management tabs
-  if (role === "admin") {
+  // If admin or client_admin, fetch full users data for management tabs
+  if (role === "admin" || role === "client_admin") {
     profiles = await listUsers(accessToken, company_id).catch((err) => {
       console.error("Failed to fetch users from Flask API:", err);
       return [];

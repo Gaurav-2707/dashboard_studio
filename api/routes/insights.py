@@ -47,7 +47,7 @@ def _generate_search_query(model, brand: str, industry: str, table_title: str, a
         return f"{brand} {table_title} India market trends"
 
 @insights_bp.route("/surveys/insights", methods=["POST"])
-@require_auth()
+@require_auth(allowed_roles=["admin", "client_admin", "analyst"])
 def generate_insights():
     user_id = g.user_id
     company_id = g.company_id
@@ -261,11 +261,11 @@ def generate_insights():
 
     except Exception as e:
         logger.exception("Error generating insights")
-        return jsonify({"error": "Failed to generate insights: " + str(e)}), 500
+        return jsonify({"error": "Failed to generate insights. Please try again."}), 500
 
 
 @insights_bp.route("/surveys/<survey_id>/context", methods=["GET"])
-@require_auth()
+@require_auth(allowed_roles=["admin", "client_admin", "analyst"])
 def get_survey_context(survey_id):
     try:
         from services.supabase_client import get_supabase_client
@@ -291,7 +291,7 @@ def get_survey_context(survey_id):
         return jsonify({"context": context_text}), 200
     except Exception as e:
         logger.exception("Error getting survey context")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "An internal error occurred."}), 500
 
 
 @insights_bp.route("/surveys/<survey_id>/context", methods=["POST"])
@@ -328,4 +328,4 @@ def save_survey_context(survey_id):
         return jsonify({"success": True}), 200
     except Exception as e:
         logger.exception("Error saving survey context")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "An internal error occurred."}), 500

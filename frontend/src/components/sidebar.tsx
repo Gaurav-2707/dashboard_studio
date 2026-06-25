@@ -11,7 +11,7 @@ interface SidebarProps {
   companyId: string;
   companyName: string;
   userEmail: string;
-  role: "admin" | "analyst";
+  role: "admin" | "client_admin" | "analyst";
 }
 
 export default function Sidebar({
@@ -127,7 +127,7 @@ export default function Sidebar({
               className="text-on-surface-variant text-[11px] truncate"
               title={userEmail}
             >
-              {role === "admin" ? "System Admin" : "Analyst"}
+              {role === "admin" ? "System Admin" : role === "client_admin" ? "Client Admin" : "Analyst"}
             </span>
           </div>
         </div>

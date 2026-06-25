@@ -65,18 +65,9 @@ def create_app(config: Config | None = None) -> Flask:
     # Health check
     @app.route("/api/health", methods=["GET"])
     def health():
-        cfg = app.config.get("DASHIFY_CONFIG")
-        secret = cfg.SUPABASE_JWT_SECRET if cfg else ""
-        secret_info = {
-            "loaded": bool(secret),
-            "length": len(secret),
-            "prefix": secret[:6] if secret else "",
-            "suffix": secret[-6:] if secret else "",
-        }
         return jsonify({
             "status": "ok",
             "service": "dashify-api",
-            "jwt_secret": secret_info
         }), 200
 
     # Global error handlers
@@ -111,4 +102,4 @@ def create_app(config: Config | None = None) -> Flask:
 # Entry point for production (gunicorn) and development
 if __name__ == "__main__":
     app = create_app()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=os.environ.get("FLASK_DEBUG", "false").lower() == "true")

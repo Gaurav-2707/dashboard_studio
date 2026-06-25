@@ -19,7 +19,7 @@ interface DashboardClientProps {
   companyName: string;
   initialSurveys: any[];
   initialProfiles: any[];
-  role: "admin" | "analyst";
+  role: "admin" | "client_admin" | "analyst";
   accessToken: string;
 }
 
@@ -90,7 +90,10 @@ export default function DashboardClient({
     }
   };
 
-  // Tab states (for admins only)
+  // Derived permission: can this user manage workspace users?
+  const canManageUsers = role === "admin" || role === "client_admin";
+
+  // Tab states (for admins and client_admins)
   const [activeTab, setActiveTab] = useState<"surveys" | "users">("surveys");
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -117,23 +120,18 @@ export default function DashboardClient({
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
+  const [newUserRole, setNewUserRole] = useState<"analyst" | "client_admin">("analyst");
   const [creatingUser, setCreatingUser] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
   const [showModalPassword, setShowModalPassword] = useState(false);
-  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
-
-  const togglePasswordVisibility = (userId: string) => {
-    setVisiblePasswords((prev) => ({
-      ...prev,
-      [userId]: !prev[userId],
-    }));
-  };
 
   const handleGeneratePassword = () => {
     const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$";
+    const array = new Uint32Array(12);
+    crypto.getRandomValues(array);
     let generated = "";
-    for (let i = 0; i < 10; i++) {
-      generated += chars.charAt(Math.floor(Math.random() * chars.length));
+    for (let i = 0; i < 12; i++) {
+      generated += chars.charAt(array[i] % chars.length);
     }
     setNewUserPassword(generated);
     setShowModalPassword(true);
@@ -174,18 +172,19 @@ export default function DashboardClient({
         email: newUserEmail,
         password: newUserPassword,
         company_id: companyId,
+        role: newUserRole,
       });
       const newProfile = {
         id: user.id,
         email: newUserEmail,
         role: user.role,
-        plain_password: newUserPassword,
         created_at: user.created_at,
       };
       setProfiles((prev) => [newProfile, ...prev]);
       setShowAddUserModal(false);
       setNewUserEmail("");
       setNewUserPassword("");
+      setNewUserRole("analyst");
       router.refresh();
     } catch (err: any) {
       console.error("Error creating user:", err);
@@ -455,10 +454,10 @@ export default function DashboardClient({
             id="user-menu-btn"
           >
             <span className="material-symbols-outlined text-[18px] text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
-              {role === "admin" ? "admin_panel_settings" : "person"}
+              {role === "admin" ? "admin_panel_settings" : role === "client_admin" ? "supervised_user_circle" : "person"}
             </span>
             <span className="text-label-sm font-bold text-on-surface-variant">
-              {role === "admin" ? "Admin" : "Analyst"}
+              {role === "admin" ? "Admin" : role === "client_admin" ? "Client Admin" : "Analyst"}
             </span>
             <span className="material-symbols-outlined text-[16px] text-on-surface-variant transition-transform duration-200" style={{ transform: showUserMenu ? "rotate(180deg)" : "rotate(0deg)" }}>
               expand_more
@@ -469,7 +468,7 @@ export default function DashboardClient({
             <div className="absolute right-0 top-full mt-2 w-44 bg-surface-container-low border border-outline-variant/20 rounded-xl shadow-2xl overflow-hidden z-50 animate-fade-in">
               <div className="px-4 py-3 border-b border-outline-variant/10">
                 <p className="text-[11px] text-on-surface-variant uppercase tracking-widest font-bold">Signed in as</p>
-                <p className="text-label-sm font-bold text-on-surface truncate mt-0.5">{role === "admin" ? "Admin" : "Analyst"}</p>
+                <p className="text-label-sm font-bold text-on-surface truncate mt-0.5">{role === "admin" ? "Admin" : role === "client_admin" ? "Client Admin" : "Analyst"}</p>
               </div>
               <form action={signOut}>
                 <button
@@ -489,7 +488,7 @@ export default function DashboardClient({
       {/* Main Content Area */}
       <section className="pt-24 px-4 pb-xl max-w-container-max mx-auto">
         {/* Navigation Tabs (Only rendered for admins) */}
-        {role === "admin" ? (
+        {canManageUsers ? (
           <div className="flex border-b border-outline-variant/20 mb-lg">
             <button
               onClick={() => setActiveTab("surveys")}
@@ -515,7 +514,7 @@ export default function DashboardClient({
         ) : null}
 
         {/* Dynamic Tab Rendering */}
-        {(activeTab === "surveys" || role !== "admin") && (
+        {(activeTab === "surveys" || !canManageUsers) && (
           <>
             {/* Action Bar (Admins see upload button) */}
             <div className="flex flex-wrap items-center justify-between gap-md mb-lg">
@@ -536,7 +535,7 @@ export default function DashboardClient({
             </div>
 
             {/* Stats Cards Preview */}
-            <div className={`grid grid-cols-1 gap-md mb-lg ${role === "admin" ? "md:grid-cols-2" : "md:grid-cols-1"}`}>
+            <div className={`grid grid-cols-1 gap-md mb-lg ${canManageUsers ? "md:grid-cols-2" : "md:grid-cols-1"}`}>
               <div className="glass-card p-md rounded-xl flex items-center gap-md">
                 <div className="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center text-secondary">
                   <span className="material-symbols-outlined">chart_data</span>
@@ -548,7 +547,7 @@ export default function DashboardClient({
                   <h4 className="text-headline-md font-bold">{surveys.length}</h4>
                 </div>
               </div>
-              {role === "admin" && (
+              {canManageUsers && (
                 <div className="glass-card p-md rounded-xl flex items-center gap-md">
                   <div className="w-12 h-12 rounded-full bg-tertiary/10 flex items-center justify-center text-tertiary">
                     <span className="material-symbols-outlined">group</span>
@@ -575,7 +574,7 @@ export default function DashboardClient({
                   No Surveys Found
                 </h3>
                 <p className="text-body-md text-on-surface-variant max-w-[384px] mb-lg">
-                  {role === "admin"
+                  {canManageUsers
                     ? "Upload your first Excel survey workbook to get started with cross-tab analysis."
                     : "No surveys have been uploaded to this workspace yet."}
                 </p>
@@ -671,7 +670,7 @@ export default function DashboardClient({
           </>
         )}
 
-        {role === "admin" && activeTab === "users" && (
+        {canManageUsers && activeTab === "users" && (
           <div className="glass-panel rim-light rounded-xl overflow-hidden shadow-2xl">
             <div className="p-md border-b border-outline-variant/20 bg-white/5 flex flex-wrap items-center justify-between gap-md">
               <div>
@@ -691,7 +690,6 @@ export default function DashboardClient({
                 <tr className="bg-white/5 border-b border-outline-variant/20">
                   <th className="px-md py-4 font-label-md text-on-surface-variant">User Email ID</th>
                   <th className="px-md py-4 font-label-md text-on-surface-variant">System Role</th>
-                  <th className="px-md py-4 font-label-md text-on-surface-variant">Password Set</th>
                   <th className="px-md py-4 font-label-md text-on-surface-variant">Member Since</th>
                   <th className="px-md py-4 font-label-md text-on-surface-variant">Actions</th>
                 </tr>
@@ -699,7 +697,7 @@ export default function DashboardClient({
               <tbody className="divide-y divide-outline-variant/10">
                 {profiles.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-md py-8 text-center text-on-surface-variant">
+                    <td colSpan={4} className="px-md py-8 text-center text-on-surface-variant">
                       No members bound to this company.
                     </td>
                   </tr>
@@ -713,33 +711,13 @@ export default function DashboardClient({
                         <span
                           className={`px-3 py-1 rounded-full text-[12px] font-bold uppercase tracking-tight ${profile.role === "admin"
                             ? "bg-primary/20 text-primary"
-                            : "bg-secondary/20 text-secondary"
+                            : profile.role === "client_admin"
+                              ? "bg-tertiary/20 text-tertiary"
+                              : "bg-secondary/20 text-secondary"
                             }`}
                         >
-                          {profile.role}
+                          {profile.role === "client_admin" ? "client admin" : profile.role}
                         </span>
-                      </td>
-                      <td className="px-md py-5 text-on-surface-variant text-label-md font-mono">
-                        <div className="flex items-center gap-xs">
-                          <span className="min-w-[70px] inline-block">
-                            {profile.plain_password ? (
-                              visiblePasswords[profile.id] ? profile.plain_password : "••••••••"
-                            ) : (
-                              <span className="italic text-on-surface-variant/40">Not available</span>
-                            )}
-                          </span>
-                          {profile.plain_password && (
-                            <button
-                              onClick={() => togglePasswordVisibility(profile.id)}
-                              className="text-on-surface-variant hover:text-primary transition-colors cursor-pointer p-1 rounded hover:bg-white/5 inline-flex items-center"
-                              aria-label={visiblePasswords[profile.id] ? "Hide password" : "Show password"}
-                            >
-                              <span className="material-symbols-outlined text-[16px]">
-                                {visiblePasswords[profile.id] ? "visibility_off" : "visibility"}
-                              </span>
-                            </button>
-                          )}
-                        </div>
                       </td>
                       <td className="px-md py-5 text-on-surface-variant font-label-md">
                         {new Date(profile.created_at).toLocaleDateString("en-IN", {
@@ -751,6 +729,8 @@ export default function DashboardClient({
                       <td className="px-md py-5">
                         {profile.id === currentUserId ? (
                           <span className="text-[12px] text-on-surface-variant italic font-medium">Current Session</span>
+                        ) : (role === "client_admin" && profile.role !== "analyst") ? (
+                          <span className="text-[12px] text-on-surface-variant italic font-medium">—</span>
                         ) : (
                           <button
                             onClick={() => handleDeleteUser(profile.id)}
@@ -773,9 +753,9 @@ export default function DashboardClient({
         {showAddUserModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div className="glass-panel max-w-[448px] w-full p-gutter rounded-3xl border border-outline-variant/20 flex flex-col gap-md shadow-2xl relative animate-fade-in bg-[#131b2e]">
-              <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">Add New Analyst User</h3>
+              <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">Add New User</h3>
               <p className="text-body-md text-on-surface-variant">
-                Create a new login user. The role is hardcoded to <strong>Analyst</strong>.
+                Create a new login user for this workspace.
               </p>
               {modalError && (
                 <p className="text-label-sm text-error bg-error/15 border border-error/25 p-2 rounded-lg">
@@ -825,6 +805,17 @@ export default function DashboardClient({
                     </button>
                   </div>
                 </div>
+                <div className="flex flex-col gap-xs">
+                  <label className="text-label-sm text-on-surface-variant font-bold">Role</label>
+                  <select
+                    value={newUserRole}
+                    onChange={(e) => setNewUserRole(e.target.value as "analyst" | "client_admin")}
+                    className="px-4 py-2 bg-surface-container border border-outline-variant/30 rounded-lg text-on-surface focus:ring-1 focus:ring-primary outline-none text-sm appearance-none cursor-pointer"
+                  >
+                    <option value="analyst">Analyst</option>
+                    {role === "admin" && <option value="client_admin">Client Admin</option>}
+                  </select>
+                </div>
               </div>
               <div className="flex justify-end gap-sm mt-md">
                 <button
@@ -832,6 +823,7 @@ export default function DashboardClient({
                     setShowAddUserModal(false);
                     setNewUserEmail("");
                     setNewUserPassword("");
+                    setNewUserRole("analyst");
                     setModalError(null);
                   }}
                   className="px-4 py-2 bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/20 rounded-xl text-label-md font-bold transition-all cursor-pointer"

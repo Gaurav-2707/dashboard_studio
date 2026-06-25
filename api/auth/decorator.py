@@ -21,7 +21,7 @@ def require_auth(allowed_roles: list[str] | None = None):
     After successful validation, the following are available on `flask.g`:
         g.user_id      — UUID string of the authenticated user
         g.company_id   — UUID string of the user's tenant
-        g.role         — 'admin' or 'analyst'
+        g.role         — 'admin', 'client_admin', or 'analyst'
 
     Args:
         allowed_roles: List of roles permitted to access the route.
@@ -138,12 +138,12 @@ def require_auth(allowed_roles: list[str] | None = None):
                 abort(403, description="User has no assigned role")
 
             # --- 4. Role enforcement ---
-            if allowed_roles and role not in allowed_roles and role != "admin":
+            if allowed_roles and role not in allowed_roles:
                 logger.warning(
                     f"Role '{role}' not in allowed_roles {allowed_roles} "
                     f"for user {user_id}"
                 )
-                abort(403, description=f"Insufficient permissions. Required: {allowed_roles}")
+                abort(403, description=f"Insufficient permissions.")
 
             # --- 5. Populate request context ---
             g.user_id = user_id

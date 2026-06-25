@@ -13,6 +13,31 @@ export async function deleteSurveyAction(
   surveyId: string,
   companyId: string
 ): Promise<DeleteSurveyResult> {
+  // 0. Verify the caller has admin role before proceeding
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: "Not authenticated." };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, company_id")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || profile.role !== "admin") {
+    return { success: false, error: "Forbidden: Only admins can delete surveys." };
+  }
+
+  // For tenant-bound admins, verify survey belongs to their company
+  if (profile.company_id && profile.company_id !== companyId) {
+    return { success: false, error: "Forbidden: Survey belongs to a different company." };
+  }
+
   // 1. Delete associated cached insights first using admin client to bypass any RLS/privilege limits
   const adminSupabase = createAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,16 +53,15 @@ export async function deleteSurveyAction(
     console.error("Failed to delete insights cache for survey:", cacheError);
   }
 
-  // 2. Delete the survey record
-  const supabase = await createClient();
-
-  const { error } = await supabase
+  // 2. Delete the survey record using admin client with company scoping
+  const { error } = await adminSupabase
     .from("parsed_surveys")
     .delete()
-    .eq("id", surveyId);
+    .eq("id", surveyId)
+    .eq("company_id", companyId);
 
   if (error) {
-    return { success: false, error: error.message };
+    return { success: false, error: "Failed to delete survey." };
   }
 
   revalidatePath(`/dashboard/${companyId}`);

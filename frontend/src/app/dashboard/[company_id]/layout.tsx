@@ -30,7 +30,7 @@ export default async function DashboardLayout({
   ]);
 
   const companyName = companyResult.data?.name || "Unknown";
-  const role = (profileResult.data?.role as "admin" | "analyst") || "analyst";
+  const role = (profileResult.data?.role as "admin" | "client_admin" | "analyst") || "analyst";
   const userEmail = user.email || "";
 
   return (
