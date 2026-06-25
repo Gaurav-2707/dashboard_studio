@@ -129,7 +129,7 @@ export async function getSurvey(
  */
 export async function createUser(
   token: string,
-  payload: { email: string; password?: string; company_id?: string }
+  payload: { email: string; password?: string; company_id?: string; role?: string }
 ): Promise<{ id: string; email: string; company_id: string; role: string; created_at: string }> {
   return apiFetch("/api/companies/users", token, {
     method: "POST",
@@ -156,7 +156,7 @@ export async function deleteUser(
 export async function listUsers(
   token: string,
   companyId: string
-): Promise<Array<{ id: string; email: string; role: string; plain_password?: string; created_at: string }>> {
+): Promise<Array<{ id: string; email: string; role: string; created_at: string }>> {
   return apiFetch(`/api/companies/users?company_id=${companyId}`, token, { method: "GET" });
 }
 

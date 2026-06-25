@@ -17,7 +17,7 @@ export interface Company {
 export interface Profile {
   id: string;
   company_id: string | null;
-  role: "admin" | "analyst";
+  role: "admin" | "client_admin" | "analyst";
   created_at: string;
 }
 
@@ -51,7 +51,7 @@ export interface SurveyTable {
 export interface DashifyJWTClaims {
   sub: string;
   company_id: string | null;
-  user_role: "admin" | "analyst" | "unassigned";
+  user_role: "admin" | "client_admin" | "analyst" | "unassigned";
   company_status: "active" | "pending_deletion" | null;
   exp: number;
   iat: number;

@@ -25,7 +25,7 @@ interface ChartViewerProps {
   filename: string;
   surveyData: SurveyData;
   accessToken: string;
-  role?: "admin" | "analyst";
+  role?: "admin" | "client_admin" | "analyst";
   companyId?: string;
 }
 
@@ -87,114 +87,7 @@ function wrapText(text: string, width: number): string[] {
   return lines;
 }
 
-function computeIntersectionColumn(
-  tableData: Record<string, Record<string, number | string>>,
-  selectedCols: string[]
-): string {
-  if (selectedCols.length < 2) {
-    return selectedCols[0] || "Total";
-  }
-
-  const combinedName = selectedCols.join(" & ");
-
-  // 1. Estimate base sizes for Weighted Sample and Unweighted Sample
-  for (const baseKey of ["Weighted Sample", "Unweighted Sample"]) {
-    if (baseKey in tableData) {
-      const baseRow = tableData[baseKey];
-      const totalBase = toNumber(baseRow["Total"]);
-
-      if (totalBase === null || totalBase <= 0) {
-        const bases = selectedCols
-          .filter((col) => col in baseRow)
-          .map((col) => toNumber(baseRow[col]))
-          .filter((b): b is number => b !== null);
-        tableData[baseKey][combinedName] = bases.length > 0 ? Math.min(...bases) : 0.0;
-      } else {
-        const bases = selectedCols
-          .filter((col) => col in baseRow)
-          .map((col) => toNumber(baseRow[col]))
-          .filter((b): b is number => b !== null);
-
-        if (bases.length > 0) {
-          // Overflow-safe multiplication of ratios
-          let prod = bases[0];
-          for (let i = 1; i < bases.length; i++) {
-            prod *= bases[i] / totalBase;
-          }
-          tableData[baseKey][combinedName] = prod;
-        } else {
-          tableData[baseKey][combinedName] = 0.0;
-        }
-      }
-    }
-  }
-
-  // 2. Compute the cell values for responses
-  const responseLabels = Object.keys(tableData).filter((label) =>
-    isResponseAnswer(label)
-  );
-
-  // Check if the calculated weighted base is 0 (or less than 0.5)
-  const weightedBase = toNumber(
-    tableData["Weighted Sample"]?.[combinedName]
-  );
-  const isEmptyBase = weightedBase !== null && weightedBase < 0.5;
-
-  const rawVals: Record<string, number> = {};
-  let sumRaw = 0.0;
-
-  const sumInputs: Record<string, number> = {};
-  for (const col of selectedCols) {
-    sumInputs[col] = 0.0;
-  }
-
-  for (const label of responseLabels) {
-    const rowVals = tableData[label];
-    const totalVal = toNumber(rowVals["Total"]);
-
-    const colVals: number[] = [];
-    for (const col of selectedCols) {
-      const val = toNumber(rowVals[col]);
-      if (val !== null) {
-        colVals.push(val);
-        sumInputs[col] += val;
-      }
-    }
-
-    if (colVals.length === 0) continue;
-
-    let est: number;
-    if (totalVal === null || totalVal <= 0) {
-      est = colVals.reduce((a, b) => a + b, 0) / colVals.length;
-    } else {
-      // Overflow-safe ratio multiplication
-      est = colVals[0];
-      for (let i = 1; i < colVals.length; i++) {
-        est *= colVals[i] / totalVal;
-      }
-    }
-
-    rawVals[label] = est;
-    sumRaw += est;
-  }
-
-  // 3. Normalize percentages
-  const avgSumInputs =
-    selectedCols.length > 0
-      ? Object.values(sumInputs).reduce((a, b) => a + b, 0) / selectedCols.length
-      : 100.0;
-  const factor = sumRaw > 0 ? avgSumInputs / sumRaw : 1.0;
-
-  for (const label of responseLabels) {
-    if (isEmptyBase) {
-      tableData[label][combinedName] = 0.0;
-    } else if (label in rawVals) {
-      tableData[label][combinedName] = rawVals[label] * factor;
-    }
-  }
-
-  return combinedName;
-}
+// Intersection calculations removed as requested.
 
 // ============================================================================
 // Component
@@ -216,14 +109,15 @@ export default function ChartViewer({
   );
 
   const [selectedTableId, setSelectedTableId] = useState(tableIds[0] || "");
-  const [groups, setGroups] = useState<string[][]>([["Total"]]);
-  const [inputValues, setInputValues] = useState<Record<number, string>>({});
+  const [activeColumns, setActiveColumns] = useState<string[]>(["Total"]);
+  const [questionSearchColumnInput, setQuestionSearchColumnInput] = useState("");
+  const plotRef = useRef<any>(null);
   const [chartType, setChartType] = useState<ChartType>("Bar");
   const [sortOrder, setSortOrder] = useState<SortOrder>("Highest to lowest");
   const [showAll, setShowAll] = useState(false);
   const [topN, setTopN] = useState(20);
   const [chartTitle, setChartTitle] = useState("");
-  const [axisLabel, setAxisLabel] = useState("Percentage");
+  const [axisLabel, setAxisLabel] = useState("Percentage (%)");
   const [paletteName, setPaletteName] = useState("Default");
   const [chartSizeName, setChartSizeName] = useState<"Small" | "Medium" | "Large">("Medium");
   const [showLabels, setShowLabels] = useState(true);
@@ -267,26 +161,24 @@ export default function ChartViewer({
     [tableData]
   );
 
-  // Compute active columns — intersection runs client-side, mutating a deep copy
-  const { activeColumns, computedTableData } = useMemo(() => {
-    // Deep copy table data so intersection writes don't mutate original surveyData
-    const dataCopy: Record<string, Record<string, number | string>> = {};
-    for (const [key, val] of Object.entries(tableData)) {
-      dataCopy[key] = { ...val };
-    }
-
-    const cols: string[] = [];
-    for (const group of groups) {
-      if (group.length >= 2) {
-        const combinedCol = computeIntersectionColumn(dataCopy, group);
-        cols.push(combinedCol);
-      } else if (group.length === 1) {
-        cols.push(group[0]);
+  // Sync selected columns when table changes to filter out non-existent columns
+  useEffect(() => {
+    if (availableColumns.length > 0) {
+      const filtered = activeColumns.filter((col) => availableColumns.includes(col));
+      if (filtered.length === 0) {
+        if (availableColumns.includes("Total")) {
+          setActiveColumns(["Total"]);
+        } else {
+          setActiveColumns([availableColumns[0]]);
+        }
+      } else {
+        setActiveColumns(filtered);
       }
     }
+  }, [availableColumns]);
 
-    return { activeColumns: cols, computedTableData: dataCopy };
-  }, [tableData, groups]);
+  // Map computedTableData directly to tableData (no intersection calculations)
+  const computedTableData = tableData;
 
   const fetchAIInsights = useCallback(async (colsToUse?: string[]) => {
     const cols = Array.isArray(colsToUse) ? colsToUse : activeColumns;
@@ -386,14 +278,7 @@ export default function ChartViewer({
     return data;
   }, [chartData, sortOrder, showAll, topN]);
 
-  const handleGroupChange = useCallback(
-    (groupIdx: number, cols: string[]) => {
-      const newGroups = [...groups];
-      newGroups[groupIdx] = cols;
-      setGroups(newGroups);
-    },
-    [groups]
-  );
+
 
   // --- Build Plotly figure ---
   const selectedGroup = activeColumns.join(", ");
@@ -479,6 +364,30 @@ export default function ChartViewer({
     return chartType === "Horizontal bar" ? Math.max(height, displayAnswersCount * 28 + 100) : height;
   }, [chartType, height, displayAnswersCount]);
 
+  const handleDownloadChart = useCallback(async () => {
+    if (!plotRef.current) return;
+
+    const Plotly = (window as any).Plotly;
+    if (!Plotly) {
+      console.error("Plotly global library not found in window");
+      return;
+    }
+
+    const filename = `table_${selectedTableId}_${chartType.toLowerCase().replace(" ", "_")}_${activeColumns.join("_").replace(/\s+/g, "_").substring(0, 40)}`;
+
+    try {
+      await Plotly.downloadImage(plotRef.current, {
+        format: "png",
+        width: width || 800,
+        height: plotHeight || 600,
+        scale: 3, // 3x resolution scale for crisp print-quality outputs
+        filename: filename,
+      });
+    } catch (err) {
+      console.error("Error downloading chart image:", err);
+    }
+  }, [selectedTableId, chartType, activeColumns, width, plotHeight]);
+
   const layout = useMemo(
     () => ({
       autosize: true,
@@ -492,9 +401,13 @@ export default function ChartViewer({
       plot_bgcolor: "white",
       paper_bgcolor: "white",
       barmode: "group" as const,
+      font: {
+        family: '"Hanken Grotesk", "Inter", "Helvetica Neue", Arial, sans-serif',
+        color: "#475569",
+      },
       title: {
         text: `<b>${wrappedTitle}</b>`,
-        font: { size: 15, color: "#333333", family: "Inter" },
+        font: { size: 15, color: "#333333", family: '"Hanken Grotesk", "Inter", sans-serif' },
         xref: "paper" as const,
         yref: "container" as const,
         x: 0.5,
@@ -511,8 +424,8 @@ export default function ChartViewer({
         linewidth: 0.5,
         automargin: true,
         tickangle: chartType === "Horizontal bar" ? undefined : -labelRotation,
-        title: chartType === "Horizontal bar" ? axisLabel : undefined,
-        tickfont: { size: 10, color: "#475569" },
+        title: chartType === "Horizontal bar" ? { text: axisLabel, font: { size: 11, color: "#475569", family: '"Inter", sans-serif' } } : undefined,
+        tickfont: { size: 10, color: "#475569", family: '"Inter", sans-serif' },
       },
       yaxis: {
         showgrid: showGridlines,
@@ -522,8 +435,8 @@ export default function ChartViewer({
         linecolor: "#cbd5e1",
         linewidth: 0.5,
         automargin: true,
-        title: chartType !== "Horizontal bar" ? axisLabel : undefined,
-        tickfont: { size: 10, color: "#475569" },
+        title: chartType !== "Horizontal bar" ? { text: axisLabel, font: { size: 11, color: "#475569", family: '"Inter", sans-serif' } } : undefined,
+        tickfont: { size: 10, color: "#475569", family: '"Inter", sans-serif' },
       },
       showlegend: true,
       legend: {
@@ -534,7 +447,7 @@ export default function ChartViewer({
         y: 0.5,
         xanchor: "left" as const,
         yanchor: "middle" as const,
-        font: { size: 10 },
+        font: { size: 10, family: '"Inter", sans-serif' },
       },
     }),
     [width, plotHeight, wrappedTitle, showGridlines, labelRotation, axisLabel, chartType]
@@ -590,87 +503,61 @@ export default function ChartViewer({
 
 
 
-      {/* Top Breaks Comparison */}
+      {/* Top Breaks Selector */}
       <div className="space-y-sm pt-2">
         <p className="text-label-sm font-bold text-on-surface border-b border-outline-variant/10 pb-1">
-          Top Breaks Comparison
+          Top Breaks
         </p>
 
-        <div className="space-y-xs max-h-[280px] overflow-y-auto custom-scrollbar">
-          {groups.map((group, idx) => (
-            <div
-              key={idx}
-              className="p-2 rounded-lg bg-white/5 border border-outline-variant/10 flex flex-col gap-1.5"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-label-sm text-secondary font-bold">
-                  Group {idx + 1}
-                </span>
-                {groups.length > 1 && (
-                  <button
-                    onClick={() => {
-                      setGroups(groups.filter((_, i) => i !== idx));
-                    }}
-                    className="text-on-surface-variant hover:text-error text-label-sm cursor-pointer"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1.5 mb-1.5">
-                {group.map((col) => (
-                  <span key={col} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 border border-primary/20 text-primary">
-                    {col.length > 20 ? col.slice(0, 18) + "..." : col}
-                    <button
-                      onClick={() => {
-                        const newCols = group.filter((c) => c !== col);
-                        handleGroupChange(idx, newCols);
-                      }}
-                      className="hover:text-red-400 text-[10px] font-bold cursor-pointer ml-1 text-primary"
-                    >
-                      ✕
-                    </button>
-                  </span>
-                ))}
-              </div>
-
-              <input
-                list={`datalist-group-${idx}`}
-                className="w-full bg-surface-container-high border border-outline-variant/30 rounded-lg text-on-surface py-1.5 px-3 focus:ring-1 focus:ring-primary outline-none text-xs"
-                placeholder="+ Add column (type to search)..."
-                value={inputValues[idx] || ""}
-                onChange={(e) => {
-                  const col = e.target.value;
-                  setInputValues((prev) => ({ ...prev, [idx]: col }));
-
-                  const validColumns = availableColumns.filter((c) => !group.includes(c));
-                  if (validColumns.includes(col)) {
-                    const newCols = [...group, col];
-                    handleGroupChange(idx, newCols);
-                    setInputValues((prev) => ({ ...prev, [idx]: "" }));
-                  }
-                }}
-              />
-              <datalist id={`datalist-group-${idx}`}>
-                {availableColumns
-                  .filter((col) => !group.includes(col))
-                  .map((col) => (
-                    <option key={col} value={col} />
-                  ))}
-              </datalist>
-            </div>
-          ))}
+        <div className="flex flex-wrap gap-1.5 min-h-[40px] max-h-[160px] overflow-y-auto p-2 rounded-lg custom-scrollbar">
+          {activeColumns.length === 0 ? (
+            <span className="text-xs text-on-surface-variant/40 italic">No top breaks selected</span>
+          ) : (
+            activeColumns.map((col) => (
+              <span key={col} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 border border-primary/20 text-primary">
+                {col.length > 20 ? col.slice(0, 18) + "..." : col}
+                <button
+                  onClick={() => {
+                    setActiveColumns(activeColumns.filter((c) => c !== col));
+                  }}
+                  className="hover:text-red-400 text-[10px] font-bold cursor-pointer ml-1 text-primary"
+                >
+                  ✕
+                </button>
+              </span>
+            ))
+          )}
         </div>
 
-        <button
-          onClick={() =>
-            setGroups([...groups, []])
-          }
-          className="w-full py-2 border border-dashed border-primary/45 rounded-lg text-primary text-label-md flex items-center justify-center gap-1 hover:bg-primary/10 transition-colors cursor-pointer !shadow-none"
-        >
-          <span className="material-symbols-outlined text-[16px]">add</span>
-          Add Top Break Group
-        </button>
+        <div className="relative">
+          <input
+            list="available-columns-datalist"
+            className="w-full bg-surface-container-high border border-outline-variant/30 rounded-lg text-on-surface py-1.5 px-3 focus:ring-1 focus:ring-primary outline-none text-xs"
+            placeholder="Type to search and add top break..."
+            value={questionSearchColumnInput}
+            onChange={(e) => {
+              const col = e.target.value;
+              setQuestionSearchColumnInput(col);
+
+              const validColumns = availableColumns.filter((c) => !activeColumns.includes(c));
+              if (validColumns.includes(col)) {
+                setActiveColumns([...activeColumns, col]);
+                setQuestionSearchColumnInput("");
+              }
+            }}
+            onFocus={(e) => {
+              e.target.value = "";
+              setQuestionSearchColumnInput("");
+            }}
+          />
+          <datalist id="available-columns-datalist">
+            {availableColumns
+              .filter((col) => !activeColumns.includes(col))
+              .map((col) => (
+                <option key={col} value={col} />
+              ))}
+          </datalist>
+        </div>
       </div>
 
       {/* Chart Type Selector Grid */}
@@ -759,7 +646,7 @@ export default function ChartViewer({
       <div className="pt-md border-t border-outline-variant/20">
         <button
           onClick={() => setShowCustomization(!showCustomization)}
-          className="w-full flex items-center justify-between py-2 text-on-surface font-bold text-label-md group cursor-pointer"
+          className="w-full flex items-center justify-between py-2 text-on-surface font-bold text-label-md group cursor-pointer !shadow-none hover:text-primary transition-colors"
         >
           Chart Customization
           <span
@@ -894,17 +781,17 @@ export default function ChartViewer({
                 </p>
               </div>
             </div>
-            {/* Groups count */}
+            {/* Top Breaks count */}
             <div className="glass-panel flex-1 min-w-[160px] p-md rounded-xl flex items-center gap-md">
               <div className="w-12 h-12 rounded-lg bg-secondary/10 flex items-center justify-center text-secondary">
-                <span className="material-symbols-outlined">group</span>
+                <span className="material-symbols-outlined">filter_alt</span>
               </div>
               <div>
                 <p className="text-label-sm text-on-surface-variant uppercase tracking-wider">
-                  Groups
+                  Top Breaks
                 </p>
                 <p className="text-headline-md font-bold text-on-surface">
-                  {groups.length}
+                  {activeColumns.length}
                 </p>
               </div>
             </div>
@@ -921,7 +808,6 @@ export default function ChartViewer({
               <table className="w-full text-left font-label-md">
                 <thead className="text-on-surface-variant border-b border-outline-variant/10">
                   <tr>
-                    <th className="px-md py-2 font-medium">Group</th>
                     <th className="px-md py-2 font-medium">Top Break</th>
                     <th className="px-md py-2 font-medium text-right">Base (n)</th>
                   </tr>
@@ -931,9 +817,6 @@ export default function ChartViewer({
                     const base = computedTableData["Weighted Sample"]?.[col]
                     return (
                       <tr key={idx} className="hover:bg-white/5 transition-colors">
-                        <td className="px-md py-2 text-secondary font-bold">
-                          Group {idx + 1}
-                        </td>
                         <td className="px-md py-2 break-words max-w-[200px]" title={col}>
                           {col}
                         </td>
@@ -957,12 +840,21 @@ export default function ChartViewer({
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-primary"></span>
               <span className="text-label-sm text-on-surface-variant pr-4">Active Chart</span>
+              {chartType === "Pie" && activeColumns.length > 1 && (
+                <span className="text-label-sm text-secondary">
+                  Pie chart shows {activeColumns[0]}. Choose one top break for a different pie.
+                </span>
+              )}
             </div>
-            {chartType === "Pie" && activeColumns.length > 1 && (
-              <span className="text-label-sm text-secondary">
-                Pie chart shows {activeColumns[0]}. Choose one top break for a different pie.
-              </span>
-            )}
+
+            <button
+              onClick={handleDownloadChart}
+              className="flex items-center gap-xs px-3 py-1.5 bg-surface-container-high hover:bg-primary/20 text-on-surface-variant hover:text-primary border border-outline-variant/10 rounded-xl font-bold text-xs transition-all active:scale-95 cursor-pointer !shadow-none"
+              title="Download Chart as PNG"
+            >
+              <span className="material-symbols-outlined text-[16px]">download</span>
+              Download Chart
+            </button>
           </div>
 
           {/* Plotly Frame */}
@@ -972,10 +864,13 @@ export default function ChartViewer({
                 data={traces as any[]}
                 layout={layout as any}
                 config={{
-                  displayModeBar: true,
-                  toImageButtonOptions: {
-                    filename: `table_${selectedTableId}_${chartType.toLowerCase().replace(" ", "_")}_${activeColumns.join("_").replace(/\s+/g, "_").substring(0, 40)}`,
-                  },
+                  displayModeBar: false,
+                }}
+                onInitialized={(figure: any, graphDiv: any) => {
+                  plotRef.current = graphDiv;
+                }}
+                onUpdate={(figure: any, graphDiv: any) => {
+                  plotRef.current = graphDiv;
                 }}
                 useResizeHandler
                 style={{ width: "100%", height: "100%" }}
@@ -1042,7 +937,7 @@ export default function ChartViewer({
                     <div key={idx} className="p-md rounded-xl bg-white/5 border border-outline-variant/10 flex flex-col gap-xs relative overflow-hidden group hover:border-primary/30 transition-all duration-300">
                       <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-primary to-secondary"></div>
                       <div className="pl-xs space-y-2">
-                        <span className="text-xs uppercase font-bold tracking-wider text-secondary">
+                        <span className="text-xs uppercase font-bold tracking-wider text-primary-fixed">
                           {item.Topic}
                         </span>
                         <p className="text-sm text-on-surface font-medium leading-relaxed">
@@ -1077,7 +972,7 @@ export default function ChartViewer({
             className="w-full p-gutter flex items-center justify-between border-b border-outline-variant/10 bg-white/5 cursor-pointer outline-none"
           >
             <h3 className="font-headline-md text-on-surface flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">table_rows</span>
+              <span className="material-symbols-outlined text-primary">data_object</span>
               Data Table Preview
             </h3>
             <span className={`material-symbols-outlined transition-transform duration-200 ${showTablePreview ? "rotate-180" : ""}`}>

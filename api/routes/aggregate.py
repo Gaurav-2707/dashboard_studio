@@ -20,7 +20,7 @@ aggregate_bp = Blueprint("aggregate", __name__)
 
 
 @aggregate_bp.route("/aggregate", methods=["POST"])
-@require_auth(allowed_roles=["admin", "analyst"])
+@require_auth(allowed_roles=["admin", "client_admin", "analyst"])
 def aggregate():
     """
     Compute intersection aggregation for selected columns in a survey table.

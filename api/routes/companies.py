@@ -4,7 +4,6 @@ POST /api/companies — Admin-only company creation with agency seeding.
 GET  /api/companies — List companies (admin-only).
 """
 
-import base64
 import logging
 
 from flask import Blueprint, current_app, g, jsonify, request
@@ -13,23 +12,6 @@ from services.supabase_client import get_supabase_client
 from auth.decorator import require_auth
 
 logger = logging.getLogger(__name__)
-
-def encrypt_password(plain_password: str, secret: str) -> str:
-    """Encrypt password using XOR with JWT Secret."""
-    secret_bytes = secret.encode('utf-8')
-    plain_bytes = plain_password.encode('utf-8')
-    cipher_bytes = bytearray(p ^ secret_bytes[i % len(secret_bytes)] for i, p in enumerate(plain_bytes))
-    return base64.b64encode(cipher_bytes).decode('utf-8')
-
-def decrypt_password(cipher_b64: str, secret: str) -> str:
-    """Decrypt base64-encoded encrypted password."""
-    try:
-        secret_bytes = secret.encode('utf-8')
-        cipher_bytes = base64.b64decode(cipher_b64.encode('utf-8'))
-        plain_bytes = bytearray(c ^ secret_bytes[i % len(secret_bytes)] for i, c in enumerate(cipher_bytes))
-        return plain_bytes.decode('utf-8')
-    except Exception:
-        return None
 
 companies_bp = Blueprint("companies", __name__)
 
@@ -121,15 +103,18 @@ def list_companies():
 
 
 @companies_bp.route("/companies/users", methods=["POST"])
-@require_auth(allowed_roles=["admin"])
+@require_auth(allowed_roles=["admin", "client_admin"])
 def create_user():
     """
-    Create a new user with the 'analyst' role. Admin-only.
+    Create a new user. Admin and client_admin can access.
+    Client admins can only create 'analyst' users in their own company.
+    System admins can create users with any role.
     Expects JSON:
     {
         "email": "analyst@company.com",
         "password": "securepassword",
-        "company_id": "uuid"  // optional for tenant admin, required for global admin
+        "company_id": "uuid",  // optional for tenant admin, required for global admin
+        "role": "analyst"      // optional, defaults to 'analyst'. Only admin can set non-analyst roles.
     }
     """
     payload = request.get_json(silent=True)
@@ -145,21 +130,33 @@ def create_user():
     if len(password) < 6:
         return jsonify({"error": "Password must be at least 6 characters long."}), 400
 
-    # Determine company_id
-    company_id = g.company_id
-    if not company_id or company_id == "null":
-        company_id = payload.get("company_id")
+    # Determine target role
+    requested_role = payload.get("role", "analyst").strip().lower()
+    if g.role == "client_admin":
+        # Client admins can only create analyst users
+        if requested_role != "analyst":
+            return jsonify({"error": "Client admins can only create analyst users."}), 403
+        target_role = "analyst"
+    else:
+        # System admin can set any valid role
+        if requested_role not in ("admin", "client_admin", "analyst"):
+            return jsonify({"error": f"Invalid role: '{requested_role}'. Must be admin, client_admin, or analyst."}), 400
+        target_role = requested_role
 
-    if not company_id:
+    # Determine company_id — non-admin roles MUST use JWT claim, never client input
+    company_id = g.company_id
+    if g.role == "admin":
+        # Only system admins (who have no company_id) can specify one
+        if not company_id or company_id == "null":
+            company_id = payload.get("company_id")
+    
+    if not company_id or company_id == "null":
         return jsonify({"error": "company_id is required."}), 400
 
     cfg = current_app.config["DASHIFY_CONFIG"]
     supabase = get_supabase_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
 
     try:
-        # Encrypt password to store in user_metadata
-        encrypted_pass = encrypt_password(password, cfg.SUPABASE_JWT_SECRET)
-
         # Resolve gotrue AdminUserAttributes structure across library versions
         try:
             from gotrue import AdminUserAttributes
@@ -167,7 +164,6 @@ def create_user():
                 email=email,
                 password=password,
                 email_confirm=True,
-                user_metadata={"encrypted_password": encrypted_pass}
             )
         except ImportError:
             try:
@@ -176,14 +172,12 @@ def create_user():
                     email=email,
                     password=password,
                     email_confirm=True,
-                    user_metadata={"encrypted_password": encrypted_pass}
                 )
             except ImportError:
                 attributes = {
                     "email": email,
                     "password": password,
                     "email_confirm": True,
-                    "user_metadata": {"encrypted_password": encrypted_pass}
                 }
 
         # Check if user already exists in auth.users
@@ -204,7 +198,7 @@ def create_user():
                     supabase.auth.admin.delete_user(existing_user.id)
                 except Exception as delete_err:
                     logger.error(f"Failed to delete orphaned user {existing_user.id}: {delete_err}")
-                    return jsonify({"error": f"User is orphaned and automatic cleanup failed: {str(delete_err)}"}), 500
+                    return jsonify({"error": "An internal error occurred during user cleanup."}), 500
             else:
                 return jsonify({"error": "User with this email already exists."}), 400
 
@@ -216,11 +210,11 @@ def create_user():
 
         user_id = user_response.user.id
 
-        # 2. Create profile row with hardcoded 'analyst' role
+        # 2. Create profile row with the resolved role
         profile_result = supabase.table("profiles").insert({
             "id": user_id,
             "company_id": company_id,
-            "role": "analyst"
+            "role": target_role
         }).execute()
 
         if not profile_result.data:
@@ -231,34 +225,36 @@ def create_user():
                 logger.error(f"Failed to cleanup created user {user_id}: {cleanup_err}")
             return jsonify({"error": "Failed to create user profile."}), 500
 
-        logger.info(f"User {user_id} ({email}) created under company {company_id} by admin {g.user_id}")
+        logger.info(f"User {user_id} ({email}) created as '{target_role}' under company {company_id} by {g.role} {g.user_id}")
 
         return jsonify({
             "id": user_id,
             "email": email,
             "company_id": company_id,
-            "role": "analyst",
+            "role": target_role,
             "created_at": profile_result.data[0].get("created_at")
         }), 201
 
     except Exception as e:
         logger.exception("Error creating user")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "An internal error occurred while creating the user."}), 500
 
 
 
 @companies_bp.route("/companies/users", methods=["GET"])
-@require_auth(allowed_roles=["admin"])
+@require_auth(allowed_roles=["admin", "client_admin"])
 def list_company_users():
     """
     List all users belonging to a company. Admin-only.
     Expects query parameter: ?company_id=uuid
     """
+    # Non-admin roles MUST use JWT claim, never client input
     company_id = g.company_id
-    if not company_id or company_id == "null":
-        company_id = request.args.get("company_id")
+    if g.role == "admin":
+        if not company_id or company_id == "null":
+            company_id = request.args.get("company_id")
 
-    if not company_id:
+    if not company_id or company_id == "null":
         return jsonify({"error": "company_id is required."}), 400
 
     cfg = current_app.config["DASHIFY_CONFIG"]
@@ -278,7 +274,7 @@ def list_company_users():
         if not profiles:
             return jsonify([]), 200
 
-        # 2. Fetch all auth users to map emails and plain passwords
+        # 2. Fetch all auth users to map emails
         auth_users = supabase.auth.admin.list_users()
         auth_user_map = {u.id: u for u in auth_users}
 
@@ -288,19 +284,11 @@ def list_company_users():
             user_id = p["id"]
             u = auth_user_map.get(user_id)
             email = u.email if u else "Unknown Email"
-            
-            # Decrypt plain password if stored
-            plain_password = None
-            if u and u.user_metadata:
-                encrypted_pass = u.user_metadata.get("encrypted_password")
-                if encrypted_pass:
-                    plain_password = decrypt_password(encrypted_pass, cfg.SUPABASE_JWT_SECRET)
 
             combined_users.append({
                 "id": user_id,
                 "email": email,
                 "role": p["role"],
-                "plain_password": plain_password,
                 "created_at": p["created_at"]
             })
 
@@ -308,41 +296,43 @@ def list_company_users():
 
     except Exception as e:
         logger.exception("Error listing company users")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "An internal error occurred while listing users."}), 500
 
 
 @companies_bp.route("/companies/users/<user_id>", methods=["DELETE"])
-@require_auth(allowed_roles=["admin"])
+@require_auth(allowed_roles=["admin", "client_admin"])
 def delete_user(user_id):
     """
-    Delete a user from the company workspace. Admin-only.
+    Delete a user from the company workspace. Admin and client_admin can access.
+    Client admins can only delete analyst users within their own company.
     """
     cfg = current_app.config["DASHIFY_CONFIG"]
     supabase = get_supabase_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
 
     try:
-        # 1. Fetch user's profile to verify company constraint
-        profile_res = supabase.table("profiles").select("company_id").eq("id", user_id).execute()
+        # 1. Fetch user's profile to verify company and role constraints
+        profile_res = supabase.table("profiles").select("company_id, role").eq("id", user_id).execute()
         if not profile_res.data:
             return jsonify({"error": "User profile not found."}), 404
 
         target_company_id = profile_res.data[0]["company_id"]
+        target_role = profile_res.data[0]["role"]
 
-        # If tenant admin, verify they belong to caller's company
+        # If tenant admin or client_admin, verify they belong to caller's company
         if g.company_id and g.company_id != "null":
             if str(target_company_id) != str(g.company_id):
                 return jsonify({"error": "Forbidden: User belongs to a different company."}), 403
 
+        # Client admins can only delete analyst users — not other client_admins or system admins
+        if g.role == "client_admin" and target_role != "analyst":
+            return jsonify({"error": "Client admins can only remove analyst users."}), 403
+
         # 2. Delete user from auth (cascades and deletes profiles row)
         supabase.auth.admin.delete_user(user_id)
 
-        logger.info(f"User {user_id} deleted by admin {g.user_id}")
+        logger.info(f"User {user_id} deleted by {g.role} {g.user_id}")
         return jsonify({"message": "User deleted successfully."}), 200
 
     except Exception as e:
         logger.exception("Error deleting user")
-        return jsonify({"error": str(e)}), 500
-
-
-
-
+        return jsonify({"error": "An internal error occurred while deleting the user."}), 500
