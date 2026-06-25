@@ -110,7 +110,8 @@ export default function ChartViewer({
 
   const [selectedTableId, setSelectedTableId] = useState(tableIds[0] || "");
   const [activeColumns, setActiveColumns] = useState<string[]>(["Total"]);
-  const [questionSearchColumnInput, setQuestionSearchColumnInput] = useState("");
+  const [showTopBreaks, setShowTopBreaks] = useState(false);
+  const [topBreaksSearchQuery, setTopBreaksSearchQuery] = useState("");
   const plotRef = useRef<any>(null);
   const [chartType, setChartType] = useState<ChartType>("Bar");
   const [sortOrder, setSortOrder] = useState<SortOrder>("Highest to lowest");
@@ -160,6 +161,12 @@ export default function ChartViewer({
     () => getAvailableColumns(tableData),
     [tableData]
   );
+
+  const filteredColumns = useMemo(() => {
+    return availableColumns.filter((col) =>
+      col.toLowerCase().includes(topBreaksSearchQuery.toLowerCase())
+    );
+  }, [availableColumns, topBreaksSearchQuery]);
 
   // Sync selected columns when table changes to filter out non-existent columns
   useEffect(() => {
@@ -503,61 +510,106 @@ export default function ChartViewer({
 
 
 
-      {/* Top Breaks Selector */}
-      <div className="space-y-sm pt-2">
-        <p className="text-label-sm font-bold text-on-surface border-b border-outline-variant/10 pb-1">
-          Top Breaks
-        </p>
+      {/* Top Breaks Accordion */}
+      <div className="pt-md border-t border-outline-variant/20">
+        <button
+          onClick={() => setShowTopBreaks(!showTopBreaks)}
+          className="w-full flex items-center justify-between py-2 text-on-surface font-bold text-label-md group cursor-pointer !shadow-none hover:text-primary transition-colors"
+        >
+          Top Breaks Selection
+          <span
+            className={`material-symbols-outlined transition-transform duration-200 ${showTopBreaks ? "rotate-180" : ""
+              }`}
+          >
+            expand_more
+          </span>
+        </button>
 
-        <div className="flex flex-wrap gap-1.5 min-h-[40px] max-h-[160px] overflow-y-auto p-2 rounded-lg custom-scrollbar">
-          {activeColumns.length === 0 ? (
-            <span className="text-xs text-on-surface-variant/40 italic">No top breaks selected</span>
-          ) : (
-            activeColumns.map((col) => (
-              <span key={col} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 border border-primary/20 text-primary">
-                {col.length > 20 ? col.slice(0, 18) + "..." : col}
+        {showTopBreaks && (
+          <div className="space-y-sm mt-2 pt-2 border-t border-outline-variant/10">
+            {/* Selected Pills */}
+            <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto p-1 rounded-lg custom-scrollbar">
+              {activeColumns.length === 0 ? (
+                <span className="text-xs text-on-surface-variant/40 italic">No top breaks selected</span>
+              ) : (
+                <>
+                  {activeColumns.map((col) => (
+                    <span key={col} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-primary/10 border border-primary/20 text-primary">
+                      {col.length > 15 ? col.slice(0, 13) + "..." : col}
+                      <button
+                        onClick={() => {
+                          setActiveColumns(activeColumns.filter((c) => c !== col));
+                        }}
+                        className="hover:text-red-400 text-[9px] font-bold cursor-pointer ml-1 text-primary"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                  <button
+                    onClick={() => setActiveColumns([])}
+                    className="text-[10px] text-red-400 hover:text-red-300 font-bold ml-auto cursor-pointer !shadow-none"
+                  >
+                    Clear All
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Search Input */}
+            <div className="relative">
+              <input
+                type="text"
+                className="w-full bg-surface-container-high border border-outline-variant/30 rounded-lg text-on-surface py-1.5 px-3 focus:ring-1 focus:ring-primary outline-none text-xs"
+                placeholder="Search top breaks..."
+                value={topBreaksSearchQuery}
+                onChange={(e) => setTopBreaksSearchQuery(e.target.value)}
+              />
+              {topBreaksSearchQuery && (
                 <button
-                  onClick={() => {
-                    setActiveColumns(activeColumns.filter((c) => c !== col));
-                  }}
-                  className="hover:text-red-400 text-[10px] font-bold cursor-pointer ml-1 text-primary"
+                  onClick={() => setTopBreaksSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-on-surface-variant/60 hover:text-on-surface cursor-pointer !shadow-none"
                 >
                   ✕
                 </button>
-              </span>
-            ))
-          )}
-        </div>
+              )}
+            </div>
 
-        <div className="relative">
-          <input
-            list="available-columns-datalist"
-            className="w-full bg-surface-container-high border border-outline-variant/30 rounded-lg text-on-surface py-1.5 px-3 focus:ring-1 focus:ring-primary outline-none text-xs"
-            placeholder="Type to search and add top break..."
-            value={questionSearchColumnInput}
-            onChange={(e) => {
-              const col = e.target.value;
-              setQuestionSearchColumnInput(col);
-
-              const validColumns = availableColumns.filter((c) => !activeColumns.includes(c));
-              if (validColumns.includes(col)) {
-                setActiveColumns([...activeColumns, col]);
-                setQuestionSearchColumnInput("");
-              }
-            }}
-            onFocus={(e) => {
-              e.target.value = "";
-              setQuestionSearchColumnInput("");
-            }}
-          />
-          <datalist id="available-columns-datalist">
-            {availableColumns
-              .filter((col) => !activeColumns.includes(col))
-              .map((col) => (
-                <option key={col} value={col} />
-              ))}
-          </datalist>
-        </div>
+            {/* List with Checkboxes */}
+            <div className="flex flex-col gap-1 max-h-[180px] overflow-y-auto p-1.5 border border-outline-variant/10 rounded-lg bg-surface-container-high/30 custom-scrollbar">
+              {filteredColumns.length === 0 ? (
+                <span className="text-xs text-on-surface-variant/40 italic p-2 text-center">No matching top breaks</span>
+              ) : (
+                filteredColumns.map((col) => {
+                  const isChecked = activeColumns.includes(col);
+                  return (
+                    <label
+                      key={col}
+                      className={`flex items-start gap-2 px-2 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-all hover:bg-white/10 ${isChecked
+                          ? "bg-primary/10 text-primary font-semibold"
+                          : "text-on-surface-variant"
+                        }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {
+                          if (isChecked) {
+                            setActiveColumns(activeColumns.filter((c) => c !== col));
+                          } else {
+                            setActiveColumns([...activeColumns, col]);
+                          }
+                        }}
+                        className="rounded bg-surface-container border-outline-variant text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer shrink-0 mt-0.5"
+                      />
+                      <span className="whitespace-normal break-words leading-relaxed" title={col}>{col}</span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Chart Type Selector Grid */}
