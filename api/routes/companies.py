@@ -336,3 +336,67 @@ def delete_user(user_id):
     except Exception as e:
         logger.exception("Error deleting user")
         return jsonify({"error": "An internal error occurred while deleting the user."}), 500
+
+
+@companies_bp.route("/companies/users/reset-password", methods=["POST"])
+@require_auth(allowed_roles=["admin", "client_admin"])
+def reset_user_password():
+    """
+    Reset a user's password. Admin and client_admin can access.
+    Client admins can only reset the password of analyst users within their own company.
+    """
+    payload = request.get_json(silent=True)
+    if not payload:
+        return jsonify({"error": "Invalid JSON payload."}), 400
+
+    target_user_id = payload.get("user_id", "").strip()
+    new_password = payload.get("password", "")
+
+    if not target_user_id or not new_password:
+        return jsonify({"error": "user_id and password are required."}), 400
+
+    if len(new_password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters long."}), 400
+
+    cfg = current_app.config["DASHIFY_CONFIG"]
+    supabase = get_supabase_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
+
+    try:
+        # 1. Fetch user's profile to verify company and role constraints
+        profile_res = supabase.table("profiles").select("company_id, role").eq("id", target_user_id).execute()
+        if not profile_res.data:
+            return jsonify({"error": "User profile not found."}), 404
+
+        target_company_id = profile_res.data[0]["company_id"]
+        target_role = profile_res.data[0]["role"]
+
+        # If tenant admin or client_admin, verify they belong to caller's company
+        if g.company_id and g.company_id != "null":
+            if str(target_company_id) != str(g.company_id):
+                return jsonify({"error": "Forbidden: User belongs to a different company."}), 403
+
+        # Client admins can only reset passwords for analyst users — not other client_admins or system admins
+        if g.role == "client_admin" and target_role != "analyst":
+            return jsonify({"error": "Client admins can only reset analyst passwords."}), 403
+
+        # 2. Update user's password in auth
+        # Resolve gotrue AdminUserAttributes structure across library versions
+        try:
+            from gotrue import AdminUserAttributes
+            attributes = AdminUserAttributes(password=new_password)
+        except ImportError:
+            try:
+                from gotrue.types import AdminUserAttributes
+                attributes = AdminUserAttributes(password=new_password)
+            except ImportError:
+                attributes = {"password": new_password}
+
+        supabase.auth.admin.update_user_by_id(target_user_id, attributes)
+
+        logger.info(f"Password reset for user {target_user_id} by {g.role} {g.user_id}")
+        return jsonify({"success": True, "message": "Password reset successfully."}), 200
+
+    except Exception as e:
+        logger.exception("Error resetting user password")
+        return jsonify({"error": "An internal error occurred while resetting the password."}), 500
+
