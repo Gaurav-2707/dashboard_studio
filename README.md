@@ -1,9 +1,3 @@
-# Dashify — Single-Page Survey Analysis Dashboard
-
-Dashify is a premium, real-time survey data analysis application. It features role-based access control (RBAC), multi-tenant company isolation, AI-powered survey insights (via Nvidia NIM / Tavily Search API), and interactive chart visualizations.
-
----
-
 ## Project Structure
 The repository is split into two main decoupled services:
 * `/api` — The Flask Python backend API responsible for parsing Excel workbooks, calculating survey metrics, running search queries, and generating AI insights.
@@ -21,17 +15,7 @@ The repository is split into two main decoupled services:
 
 ## Local Setup Guide
 
-### 1. Database Setup (Supabase)
-Apply the SQL migrations located in the `/supabase/migrations` directory against your Supabase SQL editor or local Supabase CLI, in chronological order:
-1. `001_initial_schema.sql` (Creates `profiles`, `companies`, `parsed_surveys` tables)
-2. `003_auth_hook.sql` (Auth schema changes & JWT token claims custom hook)
-3. `007_add_client_admin.sql` (Updates `profiles.role` constraints & RLS policies for the Client Admin role)
-
-Ensure that row-level security (RLS) is enabled on all tables.
-
----
-
-### 2. Backend Setup (Flask API)
+### 1. Backend Setup (Flask API)
 1. **Navigate to the API folder:**
    ```bash
    cd api
@@ -66,7 +50,7 @@ Ensure that row-level security (RLS) is enabled on all tables.
 
 ---
 
-### 3. Frontend Setup (Next.js)
+### 2. Frontend Setup (Next.js)
 1. **Navigate to the frontend folder:**
    ```bash
    cd ../frontend
