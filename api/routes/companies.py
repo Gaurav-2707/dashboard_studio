@@ -299,45 +299,6 @@ def list_company_users():
         return jsonify({"error": "An internal error occurred while listing users."}), 500
 
 
-@companies_bp.route("/companies/users/<user_id>", methods=["DELETE"])
-@require_auth(allowed_roles=["admin", "client_admin"])
-def delete_user(user_id):
-    """
-    Delete a user from the company workspace. Admin and client_admin can access.
-    Client admins can only delete analyst users within their own company.
-    """
-    cfg = current_app.config["DASHIFY_CONFIG"]
-    supabase = get_supabase_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
-
-    try:
-        # 1. Fetch user's profile to verify company and role constraints
-        profile_res = supabase.table("profiles").select("company_id, role").eq("id", user_id).execute()
-        if not profile_res.data:
-            return jsonify({"error": "User profile not found."}), 404
-
-        target_company_id = profile_res.data[0]["company_id"]
-        target_role = profile_res.data[0]["role"]
-
-        # If tenant admin or client_admin, verify they belong to caller's company
-        if g.company_id and g.company_id != "null":
-            if str(target_company_id) != str(g.company_id):
-                return jsonify({"error": "Forbidden: User belongs to a different company."}), 403
-
-        # Client admins can only delete analyst users — not other client_admins or system admins
-        if g.role == "client_admin" and target_role != "analyst":
-            return jsonify({"error": "Client admins can only remove analyst users."}), 403
-
-        # 2. Delete user from auth (cascades and deletes profiles row)
-        supabase.auth.admin.delete_user(user_id)
-
-        logger.info(f"User {user_id} deleted by {g.role} {g.user_id}")
-        return jsonify({"message": "User deleted successfully."}), 200
-
-    except Exception as e:
-        logger.exception("Error deleting user")
-        return jsonify({"error": "An internal error occurred while deleting the user."}), 500
-
-
 @companies_bp.route("/companies/users/reset-password", methods=["POST"])
 @require_auth(allowed_roles=["admin", "client_admin"])
 def reset_user_password():
@@ -399,4 +360,43 @@ def reset_user_password():
     except Exception as e:
         logger.exception("Error resetting user password")
         return jsonify({"error": "An internal error occurred while resetting the password."}), 500
+
+
+@companies_bp.route("/companies/users/<user_id>", methods=["DELETE"])
+@require_auth(allowed_roles=["admin", "client_admin"])
+def delete_user(user_id):
+    """
+    Delete a user from the company workspace. Admin and client_admin can access.
+    Client admins can only delete analyst users within their own company.
+    """
+    cfg = current_app.config["DASHIFY_CONFIG"]
+    supabase = get_supabase_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
+
+    try:
+        # 1. Fetch user's profile to verify company and role constraints
+        profile_res = supabase.table("profiles").select("company_id, role").eq("id", user_id).execute()
+        if not profile_res.data:
+            return jsonify({"error": "User profile not found."}), 404
+
+        target_company_id = profile_res.data[0]["company_id"]
+        target_role = profile_res.data[0]["role"]
+
+        # If tenant admin or client_admin, verify they belong to caller's company
+        if g.company_id and g.company_id != "null":
+            if str(target_company_id) != str(g.company_id):
+                return jsonify({"error": "Forbidden: User belongs to a different company."}), 403
+
+        # Client admins can only delete analyst users — not other client_admins or system admins
+        if g.role == "client_admin" and target_role != "analyst":
+            return jsonify({"error": "Client admins can only remove analyst users."}), 403
+
+        # 2. Delete user from auth (cascades and deletes profiles row)
+        supabase.auth.admin.delete_user(user_id)
+
+        logger.info(f"User {user_id} deleted by {g.role} {g.user_id}")
+        return jsonify({"message": "User deleted successfully."}), 200
+
+    except Exception as e:
+        logger.exception("Error deleting user")
+        return jsonify({"error": "An internal error occurred while deleting the user."}), 500
 

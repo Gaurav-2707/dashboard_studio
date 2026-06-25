@@ -38,7 +38,14 @@ async function apiFetch<T>(
     },
   });
 
-  const body = await res.json();
+  let body: any;
+  const contentType = res.headers.get("content-type");
+  if (contentType && contentType.includes("application/json")) {
+    body = await res.json();
+  } else {
+    const text = await res.text();
+    body = { error: text || `HTTP error ${res.status}` };
+  }
 
   if (!res.ok) {
     throw new FlaskAPIError(res.status, body);
