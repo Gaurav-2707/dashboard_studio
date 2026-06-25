@@ -25,9 +25,11 @@ class Config:
     MAX_CONTENT_LENGTH: int = 50 * 1024 * 1024  # 50 MB
 
     def __post_init__(self):
-        # Parse comma-separated origins from env
+        # Parse comma-separated origins from env, always including defaults for deployment convenience
+        env_origins = os.environ.get("ALLOWED_ORIGINS", "")
         default_origins = "http://localhost:3000,http://localhost:3001,https://dashify-two.vercel.app,https://dashify-*.vercel.app"
-        origins_raw = os.environ.get("ALLOWED_ORIGINS", default_origins)
+        
+        origins_raw = f"{env_origins},{default_origins}" if env_origins else default_origins
         
         parsed_origins = []
         for origin in origins_raw.split(","):
