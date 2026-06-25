@@ -231,5 +231,21 @@ export async function saveSurveyContext(
   });
 }
 
+/**
+ * Reset a user's password (admin/client_admin only).
+ */
+export async function resetUserPassword(
+  token: string,
+  userId: string,
+  password: string
+): Promise<{ success: boolean; message: string }> {
+  return apiFetch("/api/companies/users/reset-password", token, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: userId, password }),
+  });
+}
+
 export { FlaskAPIError };
+
 

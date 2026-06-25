@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { getSurvey, createUser, deleteUser, getSurveyContext, saveSurveyContext } from "@/lib/flask-api";
+import { getSurvey, createUser, deleteUser, getSurveyContext, saveSurveyContext, resetUserPassword } from "@/lib/flask-api";
 import { signOut } from "@/actions/auth";
 import SurveyUpload from "@/components/survey-upload";
 import DeleteSurveyButton from "@/components/delete-survey-button";
@@ -124,6 +124,62 @@ export default function DashboardClient({
   const [creatingUser, setCreatingUser] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
   const [showModalPassword, setShowModalPassword] = useState(false);
+
+  // Password reset states
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetUserId, setResetUserId] = useState<string | null>(null);
+  const [resetUserEmail, setResetUserEmail] = useState("");
+  const [resetPasswordVal, setResetPasswordVal] = useState("");
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+
+  const handleGenerateResetPassword = () => {
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$";
+    const array = new Uint32Array(12);
+    crypto.getRandomValues(array);
+    let generated = "";
+    for (let i = 0; i < 12; i++) {
+      generated += chars.charAt(array[i] % chars.length);
+    }
+    setResetPasswordVal(generated);
+    setShowResetPassword(true);
+  };
+
+  const handleOpenResetModal = (targetUserId: string, targetEmail: string) => {
+    setResetUserId(targetUserId);
+    setResetUserEmail(targetEmail);
+    setResetPasswordVal("");
+    setShowResetPassword(false);
+    setResetSuccess(false);
+    setResetError(null);
+    setShowResetModal(true);
+  };
+
+  const handleResetPasswordSubmit = async () => {
+    if (!resetUserId || !resetPasswordVal) {
+      setResetError("Password is required.");
+      return;
+    }
+    if (resetPasswordVal.length < 6) {
+      setResetError("Password must be at least 6 characters long.");
+      return;
+    }
+
+    setResetting(true);
+    setResetError(null);
+
+    try {
+      await resetUserPassword(accessToken, resetUserId, resetPasswordVal);
+      setResetSuccess(true);
+      alerts.showAlert({ title: "Success", message: `Password for ${resetUserEmail} has been updated.` });
+    } catch (err: any) {
+      setResetError(err.error || err.message || "Failed to reset password.");
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const handleGeneratePassword = () => {
     const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$";
@@ -679,7 +735,7 @@ export default function DashboardClient({
               </div>
               <button
                 onClick={() => setShowAddUserModal(true)}
-                className="flex items-center gap-xs px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-xl text-primary font-bold text-label-md transition-all active:scale-95 cursor-pointer"
+                className="flex items-center gap-xs px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-xl text-primary font-bold text-label-md transition-all active:scale-95 cursor-pointer !shadow-none"
               >
                 <span className="material-symbols-outlined text-[20px]">add</span>
                 Add New User
@@ -691,7 +747,7 @@ export default function DashboardClient({
                   <th className="px-md py-4 font-label-md text-on-surface-variant">User Email ID</th>
                   <th className="px-md py-4 font-label-md text-on-surface-variant">System Role</th>
                   <th className="px-md py-4 font-label-md text-on-surface-variant">Member Since</th>
-                  <th className="px-md py-4 font-label-md text-on-surface-variant">Actions</th>
+                  <th className="px-md py-4 font-label-md text-on-surface-variant text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/10">
@@ -726,19 +782,28 @@ export default function DashboardClient({
                           year: "numeric",
                         })}
                       </td>
-                      <td className="px-md py-5">
+                      <td className="px-md py-5 text-center">
                         {profile.id === currentUserId ? (
-                          <span className="text-[12px] text-on-surface-variant italic font-medium">Current Session</span>
+                          <span className="text-[12px] text-on-surface-variant italic font-medium block text-center">Current Session</span>
                         ) : (role === "client_admin" && profile.role !== "analyst") ? (
-                          <span className="text-[12px] text-on-surface-variant italic font-medium">—</span>
+                          <span className="text-[12px] text-on-surface-variant italic font-medium block text-center">—</span>
                         ) : (
-                          <button
-                            onClick={() => handleDeleteUser(profile.id)}
-                            className="flex items-center gap-xs px-3 py-1.5 bg-error/15 border border-error/30 text-error hover:bg-error/25 rounded-lg text-xs font-semibold cursor-pointer transition-all active:scale-95"
-                          >
-                            <span className="material-symbols-outlined text-[16px]">delete</span>
-                            Remove
-                          </button>
+                          <div className="flex items-center justify-center gap-xs">
+                            <button
+                              onClick={() => handleOpenResetModal(profile.id, profile.email)}
+                              className="flex items-center gap-xs px-3 py-1.5 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 rounded-lg text-xs font-semibold cursor-pointer transition-all active:scale-95 !shadow-none"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">key</span>
+                              Reset Password
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUser(profile.id)}
+                              className="flex items-center gap-xs px-3 py-1.5 bg-error/15 border border-error/30 text-error hover:bg-error/25 rounded-lg text-xs font-semibold cursor-pointer transition-all active:scale-95 !shadow-none"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">delete</span>
+                              Remove
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -833,7 +898,7 @@ export default function DashboardClient({
                 </button>
                 <button
                   onClick={handleCreateUser}
-                  className="px-6 py-2 bg-primary text-on-primary hover:bg-primary/95 rounded-xl text-label-md font-bold transition-all cursor-pointer shadow-lg disabled:opacity-50"
+                  className="px-6 py-2 bg-primary text-on-primary hover:bg-primary/95 rounded-xl text-label-md font-bold transition-all cursor-pointer !shadow-none disabled:opacity-50"
                   disabled={creatingUser || !newUserEmail || !newUserPassword}
                 >
                   {creatingUser ? "Creating..." : "Create"}
@@ -906,6 +971,144 @@ export default function DashboardClient({
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reset Password Modal */}
+        {showResetModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="glass-panel max-w-[448px] w-full p-gutter rounded-3xl border border-outline-variant/20 flex flex-col gap-md shadow-2xl relative animate-fade-in bg-[#131b2e]">
+              <button
+                onClick={() => {
+                  setShowResetModal(false);
+                  setResetUserId(null);
+                }}
+                className="absolute right-4 top-4 text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+                disabled={resetting}
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+
+              <h3 className="text-title-lg font-bold text-on-surface flex items-center gap-xs">
+                <span className="material-symbols-outlined text-primary text-[24px]">key</span>
+                Reset User Password
+              </h3>
+
+              {!resetSuccess ? (
+                <>
+                  <div className="text-body-md text-on-surface-variant">
+                    Resetting password for: <strong className="text-on-surface">{resetUserEmail}</strong>
+                  </div>
+
+                  <p className="text-label-sm text-on-surface-variant/80 leading-relaxed">
+                    This will overwrite the user's password with a new temporary password. The admin must copy and share this password with the user.
+                  </p>
+
+                  {resetError && (
+                    <p className="text-label-sm text-error bg-error/15 border border-error/25 p-2 rounded-lg">
+                      {resetError}
+                    </p>
+                  )}
+
+                  <div className="flex flex-col gap-xs">
+                    <div className="flex justify-between items-center">
+                      <label className="text-label-sm text-on-surface-variant font-bold">New Password</label>
+                      <button
+                        type="button"
+                        onClick={handleGenerateResetPassword}
+                        className="text-[11px] text-primary hover:text-primary-container transition-colors font-bold cursor-pointer !shadow-none"
+                      >
+                        Generate Password
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showResetPassword ? "text" : "password"}
+                        value={resetPasswordVal}
+                        onChange={(e) => setResetPasswordVal(e.target.value)}
+                        placeholder="Min 6 characters"
+                        className="w-full px-4 py-2 pr-10 bg-surface-container border border-outline-variant/30 rounded-lg text-on-surface focus:ring-1 focus:ring-primary outline-none text-sm"
+                        disabled={resetting}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowResetPassword((v) => !v)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant/50 hover:text-on-surface-variant transition-colors cursor-pointer !shadow-none"
+                        tabIndex={-1}
+                        aria-label={showResetPassword ? "Hide password" : "Show password"}
+                      >
+                        <span className="material-symbols-outlined text-[20px]">
+                          {showResetPassword ? "visibility_off" : "visibility"}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-sm mt-md">
+                    <button
+                      onClick={() => {
+                        setShowResetModal(false);
+                        setResetUserId(null);
+                      }}
+                      className="px-4 py-2 bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/20 rounded-xl text-label-md font-bold transition-all cursor-pointer"
+                      disabled={resetting}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleResetPasswordSubmit}
+                      className="px-6 py-2 bg-primary text-on-primary hover:bg-primary/95 rounded-xl text-label-md font-bold transition-all cursor-pointer shadow-lg disabled:opacity-50 flex items-center gap-xs"
+                      disabled={resetting || !resetPasswordVal}
+                    >
+                      {resetting ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-on-primary/20 border-t-on-primary rounded-full animate-spin"></span>
+                          Resetting...
+                        </>
+                      ) : (
+                        "Update Password"
+                      )}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-col items-center gap-sm text-center py-sm">
+                    <span className="material-symbols-outlined text-green-500 text-[48px] animate-bounce">check_circle</span>
+                    <div className="text-title-md font-bold text-on-surface">Password Updated Successfully</div>
+                    <p className="text-body-sm text-on-surface-variant max-w-xs">
+                      Provide the temporary password below to <strong>{resetUserEmail}</strong>. For security, it will not be shown again.
+                    </p>
+                  </div>
+
+                  <div className="p-md bg-surface-container rounded-xl flex items-center justify-between border border-outline-variant/20">
+                    <code className="text-sm font-bold text-on-surface select-all">{resetPasswordVal}</code>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(resetPasswordVal);
+                        alerts.showAlert({ title: "Success", message: "Password copied to clipboard." });
+                      }}
+                      className="flex items-center gap-xs text-[12px] text-primary hover:text-primary-container font-bold cursor-pointer transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">content_copy</span>
+                      Copy
+                    </button>
+                  </div>
+
+                  <div className="flex justify-center mt-md">
+                    <button
+                      onClick={() => {
+                        setShowResetModal(false);
+                        setResetUserId(null);
+                      }}
+                      className="px-8 py-2 bg-primary text-on-primary hover:bg-primary/95 rounded-xl text-label-md font-bold transition-all cursor-pointer shadow-lg"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
