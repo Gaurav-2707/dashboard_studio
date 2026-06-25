@@ -5,7 +5,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams, useRouter } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 interface SidebarProps {
   companyId: string;
@@ -22,7 +22,6 @@ export default function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const router = useRouter();
   const activeSurveyId = searchParams.get("survey_id");
   const isSurveyMode = !!activeSurveyId;
 

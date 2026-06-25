@@ -1002,7 +1002,7 @@ export default function DashboardClient({
                   </div>
 
                   <p className="text-label-sm text-on-surface-variant/80 leading-relaxed">
-                    This will overwrite the user's password with a new temporary password. The admin must copy and share this password with the user.
+                    This will overwrite the user&apos;s password with a new temporary password. The admin must copy and share this password with the user.
                   </p>
 
                   {resetError && (
@@ -1077,7 +1077,7 @@ export default function DashboardClient({
                   <div className="flex flex-col items-center gap-sm text-center py-sm">
                     <span className="material-symbols-outlined text-green-500 text-[48px] animate-bounce">check_circle</span>
                     <div className="text-title-md font-bold text-on-surface">Password Updated Successfully</div>
-                    <p className="text-body-sm text-on-surface-variant max-w-xs">
+                    <p className="text-body-sm text-on-surface-variant max-w-xxl">
                       Provide the temporary password below to <strong>{resetUserEmail}</strong>. For security, it will not be shown again.
                     </p>
                   </div>
@@ -1089,7 +1089,7 @@ export default function DashboardClient({
                         navigator.clipboard.writeText(resetPasswordVal);
                         alerts.showAlert({ title: "Success", message: "Password copied to clipboard." });
                       }}
-                      className="flex items-center gap-xs text-[12px] text-primary hover:text-primary-container font-bold cursor-pointer transition-colors"
+                      className="flex items-center gap-xs text-[12px] text-primary hover:text-primary-container font-bold cursor-pointer transition-colors !shadow-none"
                     >
                       <span className="material-symbols-outlined text-[16px]">content_copy</span>
                       Copy
