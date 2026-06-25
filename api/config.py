@@ -4,7 +4,9 @@ All secrets loaded from environment variables. Never hardcoded.
 """
 
 import os
+import re
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -17,15 +19,29 @@ class Config:
     SUPABASE_JWT_SECRET: str = os.environ.get("SUPABASE_JWT_SECRET", "")
 
     # CORS — restrict to the frontend origin in production
-    ALLOWED_ORIGINS: list[str] = None  # type: ignore[assignment]
+    ALLOWED_ORIGINS: list[Any] = None  # type: ignore[assignment]
 
     # Upload limits
     MAX_CONTENT_LENGTH: int = 50 * 1024 * 1024  # 50 MB
 
     def __post_init__(self):
         # Parse comma-separated origins from env
-        origins_raw = os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000")
-        object.__setattr__(self, "ALLOWED_ORIGINS", [o.strip() for o in origins_raw.split(",")])
+        default_origins = "http://localhost:3000,http://localhost:3001,https://dashify-two.vercel.app,https://dashify-*.vercel.app"
+        origins_raw = os.environ.get("ALLOWED_ORIGINS", default_origins)
+        
+        parsed_origins = []
+        for origin in origins_raw.split(","):
+            origin_str = origin.strip()
+            if not origin_str:
+                continue
+            if "*" in origin_str:
+                # Convert glob wildcard to regex
+                escaped = re.escape(origin_str).replace(r"\*", r".*")
+                parsed_origins.append(re.compile(f"^{escaped}$"))
+            else:
+                parsed_origins.append(origin_str)
+
+        object.__setattr__(self, "ALLOWED_ORIGINS", parsed_origins)
 
     def validate(self) -> list[str]:
         """Return list of missing required env vars."""
