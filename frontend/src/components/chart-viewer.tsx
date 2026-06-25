@@ -586,8 +586,8 @@ export default function ChartViewer({
                     <label
                       key={col}
                       className={`flex items-start gap-2 px-2 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-all hover:bg-white/10 ${isChecked
-                          ? "bg-primary/10 text-primary font-semibold"
-                          : "text-on-surface-variant"
+                        ? "bg-primary/10 text-primary font-semibold"
+                        : "text-on-surface-variant"
                         }`}
                     >
                       <input
