@@ -184,9 +184,14 @@ def parse_excel_to_json(
                 continue
             table_num = int(match.group(1))
 
-            title = table_titles.get(table_num, "Unknown")
-            if title == "Unknown" and start_idx + 1 < len(rows):
-                title = str(rows[start_idx + 1][0] or "Unknown").strip()
+            # Try to get the title from the TABLES sheet first
+            title = "Unknown"
+            if start_idx + 1 < len(rows) and rows[start_idx + 1] and rows[start_idx + 1][0]:
+                title = str(rows[start_idx + 1][0]).strip()
+
+            # Fallback to INDEX sheet mapping if not found or is "Unknown"
+            if title in ("Unknown", ""):
+                title = table_titles.get(table_num, "Unknown")
 
             # Find the header row containing "TOTAL"
             header_break_idx = None
@@ -309,7 +314,10 @@ def parse_excel_to_json(
                                     )
                                 table_data[normalized_label] = base_data
 
-            parsed_tables[table_num] = table_data
+            parsed_tables[table_num] = {
+                "title": title,
+                "data": table_data,
+            }
 
         workbook.close()
     finally:
@@ -320,10 +328,10 @@ def parse_excel_to_json(
     # Build final output and sanitize NaN/Inf floats
     return _sanitize_data({
         str(table_num): {
-            "title": table_titles.get(table_num, "Unknown"),
-            "data": table_data,
+            "title": info["title"],
+            "data": info["data"],
         }
-        for table_num, table_data in sorted(parsed_tables.items())
+        for table_num, info in sorted(parsed_tables.items())
     })
 
 

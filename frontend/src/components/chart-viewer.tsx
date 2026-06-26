@@ -35,7 +35,6 @@ interface ChartViewerProps {
 
 function cleanTitle(text: string): string {
   let cleaned = text.trim();
-  cleaned = cleaned.replace(/\s*\([^)]*\)\s*/g, " ");
   cleaned = cleaned.replace(/^\s*[a-z0-9_.-]*\s*\.\s*/i, "");
   return cleaned.replace(/\s+/g, " ").trim();
 }
