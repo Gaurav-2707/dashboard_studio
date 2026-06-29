@@ -53,7 +53,7 @@ function AlertCard({ alert, onRemove }: AlertCardProps) {
     if (alert.type === "alert") {
       const timer = setTimeout(() => {
         handleClose();
-      }, 4000);
+      }, 2500);
       return () => clearTimeout(timer);
     }
   }, [alert.id, alert.type, handleClose]);
