@@ -127,6 +127,8 @@ export default function ChartViewer({
   const [showCustomization, setShowCustomization] = useState(false);
   const [showTablePreview, setShowTablePreview] = useState(false);
 
+
+
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
@@ -370,6 +372,17 @@ export default function ChartViewer({
     return chartType === "Horizontal bar" ? Math.max(height, displayAnswersCount * 28 + 100) : height;
   }, [chartType, height, displayAnswersCount]);
 
+  // Compute active columns with low base size (< 30)
+  const lowBaseColumns = useMemo(() => {
+    return activeColumns.filter((col) => {
+      const baseRaw = computedTableData["Unweighted Sample"]?.[col] ?? computedTableData["Weighted Sample"]?.[col];
+      const base = typeof baseRaw === "number" ? baseRaw : parseFloat(String(baseRaw));
+      return !isNaN(base) && base < 30;
+    });
+  }, [activeColumns, computedTableData]);
+
+
+
   const handleDownloadChart = useCallback(async () => {
     if (!plotRef.current) return;
 
@@ -533,13 +546,13 @@ export default function ChartViewer({
               ) : (
                 <>
                   {activeColumns.map((col) => (
-                    <span key={col} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-primary/10 border border-primary/20 text-primary">
-                      {col.length > 15 ? col.slice(0, 13) + "..." : col}
+                    <span key={col} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-primary/15 border border-primary/25 text-primary max-w-full break-words">
+                      {col}
                       <button
                         onClick={() => {
                           setActiveColumns(activeColumns.filter((c) => c !== col));
                         }}
-                        className="hover:text-red-400 text-[9px] font-bold cursor-pointer ml-1 text-primary"
+                        className="hover:text-red-400 text-[10px] font-bold cursor-pointer ml-1.5 text-primary shrink-0"
                       >
                         ✕
                       </button>
@@ -883,6 +896,21 @@ export default function ChartViewer({
               </table>
             </div>
           </div>
+
+          {/* Low Base Size Warning Banner */}
+          {lowBaseColumns.length > 0 && (
+            <div className="flex items-start gap-md p-md rounded-xl border border-amber-500/20 bg-amber-500/5 text-amber-400 animate-fade-in">
+              <span className="material-symbols-outlined text-[20px] shrink-0 mt-0.5">warning</span>
+              <div>
+                <p className="text-xs font-bold leading-normal">
+                  Caution: Low sample size ( &lt;30) for top break(s): <span className="underline font-mono">{lowBaseColumns.join(", ")}</span>.
+                </p>
+                <p className="text-[10px] text-amber-400/80 mt-0.5 leading-normal">
+                  Calculated from unweighted sample sizes where available. Small base sizes increase margins of error. Interpret these findings with caution.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Interactive Chart Container */}

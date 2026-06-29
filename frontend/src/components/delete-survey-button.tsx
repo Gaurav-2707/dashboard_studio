@@ -8,14 +8,18 @@ interface DeleteSurveyButtonProps {
   surveyId: string;
   companyId: string;
   filename: string;
+  onDeleteStart?: () => void;
   onDeleteSuccess?: () => void;
+  onDeleteError?: () => void;
 }
 
 export default function DeleteSurveyButton({
   surveyId,
   companyId,
   filename,
+  onDeleteStart,
   onDeleteSuccess,
+  onDeleteError,
 }: DeleteSurveyButtonProps) {
   const [deleting, setDeleting] = useState(false);
   const alerts = useAlerts();
@@ -30,13 +34,16 @@ export default function DeleteSurveyButton({
       confirmLabel: "Delete Survey",
       isDestructive: true,
       onConfirm: async () => {
+        if (onDeleteStart) onDeleteStart();
         setDeleting(true);
         const result = await deleteSurveyAction(surveyId, companyId);
         if (result.success) {
+          await new Promise((resolve) => setTimeout(resolve, 800));
           if (onDeleteSuccess) {
             onDeleteSuccess();
           }
         } else {
+          if (onDeleteError) onDeleteError();
           alerts.showAlert({
             title: "Error Deleting Survey",
             message: result.error || "Failed to delete survey.",
@@ -56,7 +63,7 @@ export default function DeleteSurveyButton({
       title="Delete Survey"
     >
       <span className="material-symbols-outlined text-[20px]">
-        {deleting ? "progress_activity" : "delete"}
+        delete
       </span>
     </button>
   );

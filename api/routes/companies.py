@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 companies_bp = Blueprint("companies", __name__)
 
+
 @companies_bp.route("/companies", methods=["POST"])
 @require_auth(allowed_roles=["admin"])
 def create_company():
@@ -227,6 +228,7 @@ def create_user():
 
         logger.info(f"User {user_id} ({email}) created as '{target_role}' under company {company_id} by {g.role} {g.user_id}")
 
+
         return jsonify({
             "id": user_id,
             "email": email,
@@ -354,6 +356,7 @@ def reset_user_password():
 
         supabase.auth.admin.update_user_by_id(target_user_id, attributes)
 
+
         logger.info(f"Password reset for user {target_user_id} by {g.role} {g.user_id}")
         return jsonify({"success": True, "message": "Password reset successfully."}), 200
 
@@ -399,4 +402,6 @@ def delete_user(user_id):
     except Exception as e:
         logger.exception("Error deleting user")
         return jsonify({"error": "An internal error occurred while deleting the user."}), 500
+
+
 

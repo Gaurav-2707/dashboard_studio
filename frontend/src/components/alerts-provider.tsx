@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 
 export interface AlertItem {
   id: string;
@@ -33,6 +33,140 @@ interface AlertsContextType {
 }
 
 const AlertsContext = createContext<AlertsContextType | undefined>(undefined);
+
+interface AlertCardProps {
+  alert: AlertItem;
+  onRemove: (id: string) => void;
+}
+
+function AlertCard({ alert, onRemove }: AlertCardProps) {
+  const [isExiting, setIsExiting] = useState(false);
+
+  const handleClose = useCallback(() => {
+    setIsExiting(true);
+    setTimeout(() => {
+      onRemove(alert.id);
+    }, 300);
+  }, [alert.id, onRemove]);
+
+  useEffect(() => {
+    if (alert.type === "alert") {
+      const timer = setTimeout(() => {
+        handleClose();
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [alert.id, alert.type, handleClose]);
+
+  const handleConfirmAction = () => {
+    if (alert.onConfirm) alert.onConfirm();
+    handleClose();
+  };
+
+  const handleCancelAction = () => {
+    if (alert.onCancel) alert.onCancel();
+    handleClose();
+  };
+
+  return (
+    <div
+      className="glass-panel w-full p-5 rounded-2xl border border-outline-variant/30 flex flex-col gap-3 shadow-2xl pointer-events-auto bg-[#131b2e]/95 backdrop-blur-md transition-all duration-300 transform translate-x-0"
+      style={{
+        animation: isExiting ? "slideOut 0.3s ease-in forwards" : "slideIn 0.3s ease-out forwards",
+      }}
+    >
+      {/* Animation styles */}
+      <style>{`
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateX(100px) scale(0.9);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+          }
+        }
+        @keyframes slideOut {
+          from {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+            max-height: 200px;
+          }
+          to {
+            opacity: 0;
+            transform: translateX(100px) scale(0.9);
+            max-height: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            margin-top: 0;
+            margin-bottom: -12px;
+            overflow: hidden;
+            border-color: transparent;
+          }
+        }
+      `}</style>
+
+      {/* Title & Icon Header */}
+      <div className="flex items-start gap-3">
+        <div
+          className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+            alert.isDestructive
+              ? "bg-error/15 text-error border border-error/30"
+              : "bg-primary/15 text-primary border border-primary/30"
+          }`}
+        >
+          <span className="material-symbols-outlined text-[20px]">
+            {alert.isDestructive
+              ? "warning"
+              : alert.type === "alert"
+              ? "info"
+              : "help_outline"}
+          </span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="font-bold text-[15px] text-on-surface truncate">
+              {alert.title}
+            </h4>
+            <button
+              onClick={handleCancelAction}
+              className="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+              title="Dismiss"
+            >
+              <span className="material-symbols-outlined text-[18px]">close</span>
+            </button>
+          </div>
+          <p className="text-body-md text-on-surface-variant mt-1 text-[13px] leading-relaxed whitespace-pre-wrap">
+            {alert.message}
+          </p>
+        </div>
+      </div>
+
+      {/* Buttons Action Group */}
+      <div className="flex justify-end gap-2.5 mt-1">
+        {alert.type === "confirm" && (
+          <button
+            onClick={handleCancelAction}
+            className="px-3 py-1.5 bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/20 rounded-lg text-xs font-bold transition-all cursor-pointer"
+          >
+            {alert.cancelLabel || "Cancel"}
+          </button>
+        )}
+        <button
+          onClick={handleConfirmAction}
+          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-md ${
+            alert.isDestructive
+              ? "bg-error text-on-error hover:bg-error/95"
+              : "bg-primary text-on-primary hover:bg-primary/95"
+          }`}
+        >
+          {alert.type === "confirm" ? alert.confirmLabel || "Confirm" : "OK"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function AlertsProvider({ children }: { children: React.ReactNode }) {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
@@ -112,99 +246,9 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
 
       {/* Floating Alert Stack Container */}
       <div className="fixed top-20 right-6 z-[100] w-full max-w-[380px] flex flex-col gap-3 pointer-events-none">
-        {alerts.map((alert) => {
-          const handleConfirmAction = () => {
-            if (alert.onConfirm) alert.onConfirm();
-            removeAlert(alert.id);
-          };
-
-          const handleCancelAction = () => {
-            if (alert.onCancel) alert.onCancel();
-            removeAlert(alert.id);
-          };
-
-          return (
-            <div
-              key={alert.id}
-              className="glass-panel w-full p-5 rounded-2xl border border-outline-variant/30 flex flex-col gap-3 shadow-2xl pointer-events-auto bg-[#131b2e]/95 backdrop-blur-md transition-all duration-300 transform translate-x-0 animate-fade-in"
-              style={{
-                animation: "slideIn 0.3s ease-out forwards",
-              }}
-            >
-              {/* Animation styles */}
-              <style>{`
-                @keyframes slideIn {
-                  from {
-                    opacity: 0;
-                    transform: translateX(100px) scale(0.9);
-                  }
-                  to {
-                    opacity: 1;
-                    transform: translateX(0) scale(1);
-                  }
-                }
-              `}</style>
-
-              {/* Title & Icon Header */}
-              <div className="flex items-start gap-3">
-                <div
-                  className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-                    alert.isDestructive
-                      ? "bg-error/15 text-error border border-error/30"
-                      : "bg-primary/15 text-primary border border-primary/30"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[20px]">
-                    {alert.isDestructive
-                      ? "warning"
-                      : alert.type === "alert"
-                      ? "info"
-                      : "help_outline"}
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <h4 className="font-bold text-[15px] text-on-surface truncate">
-                      {alert.title}
-                    </h4>
-                    <button
-                      onClick={handleCancelAction}
-                      className="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
-                      title="Dismiss"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">close</span>
-                    </button>
-                  </div>
-                  <p className="text-body-md text-on-surface-variant mt-1 text-[13px] leading-relaxed whitespace-pre-wrap">
-                    {alert.message}
-                  </p>
-                </div>
-              </div>
-
-              {/* Buttons Action Group */}
-              <div className="flex justify-end gap-2.5 mt-1">
-                {alert.type === "confirm" && (
-                  <button
-                    onClick={handleCancelAction}
-                    className="px-3 py-1.5 bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/20 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                  >
-                    {alert.cancelLabel || "Cancel"}
-                  </button>
-                )}
-                <button
-                  onClick={handleConfirmAction}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-md ${
-                    alert.isDestructive
-                      ? "bg-error text-on-error hover:bg-error/95"
-                      : "bg-primary text-on-primary hover:bg-primary/95"
-                  }`}
-                >
-                  {alert.type === "confirm" ? alert.confirmLabel || "Confirm" : "OK"}
-                </button>
-              </div>
-            </div>
-          );
-        })}
+        {alerts.map((alert) => (
+          <AlertCard key={alert.id} alert={alert} onRemove={removeAlert} />
+        ))}
       </div>
     </AlertsContext.Provider>
   );
