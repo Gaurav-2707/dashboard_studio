@@ -42,6 +42,10 @@ def upload_survey():
 
     import os
     filename, _ = os.path.splitext(original_filename)
+    
+    custom_filename = request.form.get("filename")
+    if custom_filename and custom_filename.strip():
+        filename = custom_filename.strip()
 
     # --- 2. Read file into memory ---
     file_bytes = file.read()
@@ -108,6 +112,7 @@ def upload_survey():
         return jsonify({"error": "Failed to save survey."}), 500
 
     record = insert_result.data[0]
+
 
     logger.info(
         f"Survey uploaded raw: {filename} "

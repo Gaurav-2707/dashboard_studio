@@ -64,12 +64,16 @@ async function apiFetch<T>(
 export async function uploadSurvey(
   token: string,
   file: File,
-  companyId?: string
+  companyId?: string,
+  customFilename?: string
 ): Promise<UploadResponse> {
   const formData = new FormData();
   formData.append("file", file);
   if (companyId) {
     formData.append("company_id", companyId);
+  }
+  if (customFilename) {
+    formData.append("filename", customFilename);
   }
 
   return apiFetch<UploadResponse>("/api/upload", token, {

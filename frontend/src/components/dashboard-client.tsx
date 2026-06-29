@@ -96,6 +96,8 @@ export default function DashboardClient({
   // Tab states (for admins and client_admins)
   const [activeTab, setActiveTab] = useState<"surveys" | "users">("surveys");
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [deletingSurveyId, setDeletingSurveyId] = useState<string | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   // Close user menu when clicking outside
@@ -109,6 +111,7 @@ export default function DashboardClient({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showUserMenu]);
+
 
   // Keep track of surveys in state so we can react to deletions immediately
   const [surveys, setSurveys] = useState(initialSurveys);
@@ -241,6 +244,11 @@ export default function DashboardClient({
       setNewUserEmail("");
       setNewUserPassword("");
       setNewUserRole("analyst");
+      alerts.showAlert({
+        title: "Success",
+        message: `User '${newUserEmail}' created successfully.`,
+        isDestructive: false,
+      });
       router.refresh();
     } catch (err: any) {
       console.error("Error creating user:", err);
@@ -266,8 +274,11 @@ export default function DashboardClient({
       confirmLabel: "Delete User",
       isDestructive: true,
       onConfirm: async () => {
+        setDeletingUserId(userId);
         try {
           await deleteUser(accessToken, userId);
+          // Wait briefly to show the pulsing animation clearly
+          await new Promise((resolve) => setTimeout(resolve, 800));
           setProfiles((prev) => prev.filter((p) => p.id !== userId));
           router.refresh();
         } catch (err: any) {
@@ -277,6 +288,8 @@ export default function DashboardClient({
             message: err.message || "Failed to delete user.",
             isDestructive: true,
           });
+        } finally {
+          setDeletingUserId(null);
         }
       },
     });
@@ -338,16 +351,13 @@ export default function DashboardClient({
     loadData();
   }, [activeSurveyId, accessToken]);
 
-  const handleUploadSuccess = (surveyId: string) => {
-    // Refresh the server data so the surveys list updates
+  const handleUploadSuccess = (surveyId: string, filename: string) => {
     router.refresh();
-    setActiveSurveyId(surveyId);
-
-    // Attempt to locate filename from new uploads list (will update on server sync)
-    const matched = surveys.find((s) => s.id === surveyId);
-    if (matched) setActiveSurveyFilename(matched.filename);
-
-    router.push(`/dashboard/${companyId}?survey_id=${surveyId}`);
+    alerts.showAlert({
+      title: "Success",
+      message: `Survey report '${filename}' uploaded and parsed successfully.`,
+      isDestructive: false,
+    });
   };
 
   const handleDeleteSuccess = (surveyId: string) => {
@@ -386,7 +396,12 @@ export default function DashboardClient({
               surveyId={activeSurveyId}
               companyId={companyId}
               filename={filename}
-              onDeleteSuccess={() => handleDeleteSuccess(activeSurveyId)}
+              onDeleteStart={() => setDeletingSurveyId(activeSurveyId)}
+              onDeleteSuccess={() => {
+                setDeletingSurveyId(null);
+                handleDeleteSuccess(activeSurveyId);
+              }}
+              onDeleteError={() => setDeletingSurveyId(null)}
             />
           )}
         </div>
@@ -642,16 +657,22 @@ export default function DashboardClient({
                     "en-IN",
                     { day: "numeric", month: "short", year: "numeric" }
                   );
+                  const isDeleting = deletingSurveyId === survey.id;
 
                   return (
                     <div
                       key={survey.id}
                       onClick={() => {
+                        if (isDeleting) return;
                         setActiveSurveyId(survey.id);
                         setActiveSurveyFilename(survey.filename);
                         router.push(`/dashboard/${companyId}?survey_id=${survey.id}`);
                       }}
-                      className="glass-card p-md rounded-xl flex flex-col h-full relative group cursor-pointer hover:border-primary/40 transition-colors"
+                      className={`glass-card p-md rounded-xl flex flex-col h-full relative group cursor-pointer transition-colors ${
+                        isDeleting
+                          ? "animate-pulse border-red-500/30 bg-red-500/5 text-red-300 opacity-60 pointer-events-none"
+                          : "hover:border-primary/40"
+                      }`}
                       id={`survey-card-${survey.id}`}
                     >
                       {role === "admin" && (
@@ -672,7 +693,12 @@ export default function DashboardClient({
                             surveyId={survey.id}
                             companyId={companyId}
                             filename={survey.filename}
-                            onDeleteSuccess={() => handleDeleteSuccess(survey.id)}
+                            onDeleteStart={() => setDeletingSurveyId(survey.id)}
+                            onDeleteSuccess={() => {
+                              setDeletingSurveyId(null);
+                              handleDeleteSuccess(survey.id);
+                            }}
+                            onDeleteError={() => setDeletingSurveyId(null)}
                           />
                         </div>
                       )}
@@ -758,61 +784,72 @@ export default function DashboardClient({
                     </td>
                   </tr>
                 ) : (
-                  profiles.map((profile) => (
-                    <tr key={profile.id} className="hover:bg-white/5 transition-colors">
-                      <td className="px-md py-5 text-on-surface text-label-md">
-                        {profile.email || "Unknown User"}
-                      </td>
-                      <td className="px-md py-5">
-                        <span
-                          className={`px-3 py-1 rounded-full text-[12px] font-bold uppercase tracking-tight ${profile.role === "admin"
-                            ? "bg-primary/20 text-primary"
-                            : profile.role === "client_admin"
-                              ? "bg-tertiary/20 text-tertiary"
-                              : "bg-secondary/20 text-secondary"
-                            }`}
-                        >
-                          {profile.role === "client_admin" ? "client admin" : profile.role}
-                        </span>
-                      </td>
-                      <td className="px-md py-5 text-on-surface-variant font-label-md">
-                        {new Date(profile.created_at).toLocaleDateString("en-IN", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </td>
-                      <td className="px-md py-5 text-center">
-                        {profile.id === currentUserId ? (
-                          <span className="text-[12px] text-on-surface-variant italic font-medium block text-center">Current Session</span>
-                        ) : (role === "client_admin" && profile.role !== "analyst") ? (
-                          <span className="text-[12px] text-on-surface-variant italic font-medium block text-center">—</span>
-                        ) : (
-                          <div className="flex items-center justify-center gap-xs">
-                            <button
-                              onClick={() => handleOpenResetModal(profile.id, profile.email)}
-                              className="flex items-center gap-xs px-3 py-1.5 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 rounded-lg text-xs font-semibold cursor-pointer transition-all active:scale-95 !shadow-none"
-                            >
-                              <span className="material-symbols-outlined text-[16px]">key</span>
-                              Reset Password
-                            </button>
-                            <button
-                              onClick={() => handleDeleteUser(profile.id)}
-                              className="flex items-center gap-xs px-3 py-1.5 bg-error/15 border border-error/30 text-error hover:bg-error/25 rounded-lg text-xs font-semibold cursor-pointer transition-all active:scale-95 !shadow-none"
-                            >
-                              <span className="material-symbols-outlined text-[16px]">delete</span>
-                              Remove
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                  profiles.map((profile) => {
+                    const isDeleting = deletingUserId === profile.id;
+                    return (
+                      <tr
+                        key={profile.id}
+                        className={`transition-colors ${
+                          isDeleting
+                            ? "animate-pulse bg-red-500/10 text-red-300 opacity-60 pointer-events-none"
+                            : "hover:bg-white/5"
+                        }`}
+                      >
+                        <td className="px-md py-5 text-on-surface text-label-md">
+                          {profile.email || "Unknown User"}
+                        </td>
+                        <td className="px-md py-5">
+                          <span
+                            className={`px-3 py-1 rounded-full text-[12px] font-bold uppercase tracking-tight ${profile.role === "admin"
+                              ? "bg-primary/20 text-primary"
+                              : profile.role === "client_admin"
+                                ? "bg-tertiary/20 text-tertiary"
+                                : "bg-secondary/20 text-secondary"
+                              }`}
+                          >
+                            {profile.role === "client_admin" ? "client admin" : profile.role}
+                          </span>
+                        </td>
+                        <td className="px-md py-5 text-on-surface-variant font-label-md">
+                          {new Date(profile.created_at).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </td>
+                        <td className="px-md py-5 text-center">
+                          {profile.id === currentUserId ? (
+                            <span className="text-[12px] text-on-surface-variant italic font-medium block text-center">Current Session</span>
+                          ) : (role === "client_admin" && profile.role !== "analyst") ? (
+                            <span className="text-[12px] text-on-surface-variant italic font-medium block text-center">—</span>
+                          ) : (
+                            <div className="flex items-center justify-center gap-xs">
+                              <button
+                                onClick={() => handleOpenResetModal(profile.id, profile.email)}
+                                className="flex items-center gap-xs px-3 py-1.5 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 rounded-lg text-xs font-semibold cursor-pointer transition-all active:scale-95 !shadow-none"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">key</span>
+                                Reset Password
+                              </button>
+                              <button
+                                onClick={() => handleDeleteUser(profile.id)}
+                                className="flex items-center gap-xs px-3 py-1.5 bg-error/15 border border-error/30 text-error hover:bg-error/25 rounded-lg text-xs font-semibold cursor-pointer transition-all active:scale-95 !shadow-none"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">delete</span>
+                                Remove
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
         )}
+
 
 
         {showAddUserModal && (
@@ -844,7 +881,7 @@ export default function DashboardClient({
                     <button
                       type="button"
                       onClick={handleGeneratePassword}
-                      className="text-[11px] text-primary hover:text-primary-container transition-colors font-bold cursor-pointer"
+                      className="text-[11px] text-primary hover:text-primary-container transition-colors !shadow-none font-bold cursor-pointer"
                     >
                       Generate Password
                     </button>
