@@ -127,6 +127,7 @@ export default function DashboardClient({
   const [creatingUser, setCreatingUser] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
   const [showModalPassword, setShowModalPassword] = useState(false);
+  const [createUserSuccess, setCreateUserSuccess] = useState(false);
 
   // Password reset states
   const [showResetModal, setShowResetModal] = useState(false);
@@ -240,10 +241,7 @@ export default function DashboardClient({
         created_at: user.created_at,
       };
       setProfiles((prev) => [newProfile, ...prev]);
-      setShowAddUserModal(false);
-      setNewUserEmail("");
-      setNewUserPassword("");
-      setNewUserRole("analyst");
+      setCreateUserSuccess(true);
       alerts.showAlert({
         title: "Success",
         message: `User '${newUserEmail}' created successfully.`,
@@ -820,7 +818,7 @@ export default function DashboardClient({
                         <td className="px-md py-5 text-center">
                           {profile.id === currentUserId ? (
                             <span className="text-[12px] text-on-surface-variant italic font-medium block text-center">Current Session</span>
-                          ) : (role === "client_admin" && profile.role !== "analyst") ? (
+                          ) : (role === "client_admin" && profile.role === "admin") ? (
                             <span className="text-[12px] text-on-surface-variant italic font-medium block text-center">—</span>
                           ) : (
                             <div className="flex items-center justify-center gap-xs">
@@ -854,93 +852,138 @@ export default function DashboardClient({
 
         {showAddUserModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="glass-panel max-w-[448px] w-full p-gutter rounded-3xl border border-outline-variant/20 flex flex-col gap-md shadow-2xl relative animate-fade-in bg-[#131b2e]">
-              <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">Add New User</h3>
-              <p className="text-body-md text-on-surface-variant">
-                Create a new login user for this workspace.
-              </p>
-              {modalError && (
-                <p className="text-label-sm text-error bg-error/15 border border-error/25 p-2 rounded-lg">
-                  {modalError}
-                </p>
+            <div className="glass-panel max-w-[448px] w-full p-gutter rounded-3xl border border-outline-variant/20 flex flex-col gap-md shadow-2xl relative animate-fade-in bg-[#131b2e] p-6">
+              {!createUserSuccess ? (
+                <>
+                  <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">Add New User</h3>
+                  <p className="text-body-md text-on-surface-variant">
+                    Create a new login user for this workspace.
+                  </p>
+                  {modalError && (
+                    <p className="text-label-sm text-error bg-error/15 border border-error/25 p-2 rounded-lg">
+                      {modalError}
+                    </p>
+                  )}
+                  <div className="flex flex-col gap-sm">
+                    <div className="flex flex-col gap-xs">
+                      <label className="text-label-sm text-on-surface-variant font-bold">Email Address</label>
+                      <input
+                        type="email"
+                        value={newUserEmail}
+                        onChange={(e) => setNewUserEmail(e.target.value)}
+                        placeholder="analyst@company.com"
+                        className="px-4 py-2 bg-surface-container border border-outline-variant/30 rounded-lg text-on-surface focus:ring-1 focus:ring-primary outline-none text-sm"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-xs">
+                      <div className="flex justify-between items-center">
+                        <label className="text-label-sm text-on-surface-variant font-bold">Password</label>
+                        <button
+                          type="button"
+                          onClick={handleGeneratePassword}
+                          className="text-[11px] text-primary hover:text-primary-container transition-colors !shadow-none font-bold cursor-pointer bg-transparent border-0"
+                        >
+                          Generate Password
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type={showModalPassword ? "text" : "password"}
+                          value={newUserPassword}
+                          onChange={(e) => setNewUserPassword(e.target.value)}
+                          placeholder="Min 6 characters"
+                          className="w-full px-4 py-2 pr-10 bg-surface-container border border-outline-variant/30 rounded-lg text-on-surface focus:ring-1 focus:ring-primary outline-none text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowModalPassword((v) => !v)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant/50 hover:text-on-surface-variant transition-colors cursor-pointer bg-transparent border-0 !shadow-none"
+                          tabIndex={-1}
+                          aria-label={showModalPassword ? "Hide password" : "Show password"}
+                        >
+                          <span className="material-symbols-outlined text-[20px]">
+                            {showModalPassword ? "visibility_off" : "visibility"}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-xs">
+                      <label className="text-label-sm text-on-surface-variant font-bold">Role</label>
+                      <select
+                        value={newUserRole}
+                        onChange={(e) => setNewUserRole(e.target.value as "analyst" | "client_admin")}
+                        className="px-4 py-2 bg-surface-container border border-outline-variant/30 rounded-lg text-on-surface focus:ring-1 focus:ring-primary outline-none text-sm appearance-none cursor-pointer"
+                      >
+                        <option value="analyst">Analyst</option>
+                        {(role === "admin" || role === "client_admin") && <option value="client_admin">Client Admin</option>}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-sm mt-md">
+                    <button
+                      onClick={() => {
+                        setShowAddUserModal(false);
+                        setNewUserEmail("");
+                        setNewUserPassword("");
+                        setNewUserRole("analyst");
+                        setModalError(null);
+                        setCreateUserSuccess(false);
+                      }}
+                      className="px-4 py-2 bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/20 rounded-xl text-label-md font-bold transition-all cursor-pointer"
+                      disabled={creatingUser}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleCreateUser}
+                      className="px-6 py-2 bg-primary text-on-primary hover:bg-primary/95 rounded-xl text-label-md font-bold transition-all cursor-pointer !shadow-none disabled:opacity-50"
+                      disabled={creatingUser || !newUserEmail || !newUserPassword}
+                    >
+                      {creatingUser ? "Creating..." : "Create"}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-col items-center gap-sm text-center py-sm animate-fade-in">
+                    <span className="material-symbols-outlined text-green-500 text-[48px] animate-bounce">check_circle</span>
+                    <div className="text-title-md font-bold text-on-surface">User Created Successfully</div>
+                    <p className="text-body-sm text-on-surface-variant max-w-xxl">
+                      Provide the login details below to <strong>{newUserEmail}</strong>. For security, the password will not be shown again.
+                    </p>
+                  </div>
+
+                  <div className="p-md bg-surface-container rounded-xl flex items-center justify-between border border-outline-variant/20 mt-4">
+                    <code className="text-sm font-bold text-on-surface select-all">{newUserPassword}</code>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(newUserPassword);
+                        alerts.showAlert({ title: "Success", message: "Password copied to clipboard." });
+                      }}
+                      className="flex items-center gap-xs text-[12px] text-primary hover:text-primary-container font-bold cursor-pointer transition-colors !shadow-none bg-transparent border-0"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">content_copy</span>
+                      Copy
+                    </button>
+                  </div>
+
+                  <div className="flex justify-center mt-md pt-4">
+                    <button
+                      onClick={() => {
+                        setShowAddUserModal(false);
+                        setNewUserEmail("");
+                        setNewUserPassword("");
+                        setNewUserRole("analyst");
+                        setModalError(null);
+                        setCreateUserSuccess(false);
+                      }}
+                      className="px-8 py-2 bg-primary text-on-primary hover:bg-primary/95 rounded-xl text-label-md font-bold transition-all cursor-pointer shadow-lg"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </>
               )}
-              <div className="flex flex-col gap-sm">
-                <div className="flex flex-col gap-xs">
-                  <label className="text-label-sm text-on-surface-variant font-bold">Email Address</label>
-                  <input
-                    type="email"
-                    value={newUserEmail}
-                    onChange={(e) => setNewUserEmail(e.target.value)}
-                    placeholder="analyst@company.com"
-                    className="px-4 py-2 bg-surface-container border border-outline-variant/30 rounded-lg text-on-surface focus:ring-1 focus:ring-primary outline-none text-sm"
-                  />
-                </div>
-                <div className="flex flex-col gap-xs">
-                  <div className="flex justify-between items-center">
-                    <label className="text-label-sm text-on-surface-variant font-bold">Password</label>
-                    <button
-                      type="button"
-                      onClick={handleGeneratePassword}
-                      className="text-[11px] text-primary hover:text-primary-container transition-colors !shadow-none font-bold cursor-pointer"
-                    >
-                      Generate Password
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <input
-                      type={showModalPassword ? "text" : "password"}
-                      value={newUserPassword}
-                      onChange={(e) => setNewUserPassword(e.target.value)}
-                      placeholder="Min 6 characters"
-                      className="w-full px-4 py-2 pr-10 bg-surface-container border border-outline-variant/30 rounded-lg text-on-surface focus:ring-1 focus:ring-primary outline-none text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowModalPassword((v) => !v)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant/50 hover:text-on-surface-variant transition-colors cursor-pointer"
-                      tabIndex={-1}
-                      aria-label={showModalPassword ? "Hide password" : "Show password"}
-                    >
-                      <span className="material-symbols-outlined text-[20px]">
-                        {showModalPassword ? "visibility_off" : "visibility"}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-xs">
-                  <label className="text-label-sm text-on-surface-variant font-bold">Role</label>
-                  <select
-                    value={newUserRole}
-                    onChange={(e) => setNewUserRole(e.target.value as "analyst" | "client_admin")}
-                    className="px-4 py-2 bg-surface-container border border-outline-variant/30 rounded-lg text-on-surface focus:ring-1 focus:ring-primary outline-none text-sm appearance-none cursor-pointer"
-                  >
-                    <option value="analyst">Analyst</option>
-                    {role === "admin" && <option value="client_admin">Client Admin</option>}
-                  </select>
-                </div>
-              </div>
-              <div className="flex justify-end gap-sm mt-md">
-                <button
-                  onClick={() => {
-                    setShowAddUserModal(false);
-                    setNewUserEmail("");
-                    setNewUserPassword("");
-                    setNewUserRole("analyst");
-                    setModalError(null);
-                  }}
-                  className="px-4 py-2 bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/20 rounded-xl text-label-md font-bold transition-all cursor-pointer"
-                  disabled={creatingUser}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreateUser}
-                  className="px-6 py-2 bg-primary text-on-primary hover:bg-primary/95 rounded-xl text-label-md font-bold transition-all cursor-pointer !shadow-none disabled:opacity-50"
-                  disabled={creatingUser || !newUserEmail || !newUserPassword}
-                >
-                  {creatingUser ? "Creating..." : "Create"}
-                </button>
-              </div>
             </div>
           </div>
         )}

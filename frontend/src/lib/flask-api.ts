@@ -172,6 +172,15 @@ export async function listUsers(
 }
 
 /**
+ * List all system-level admins.
+ */
+export async function listSystemAdmins(
+  token: string
+): Promise<Array<{ id: string; email: string; role: string; created_at: string }>> {
+  return apiFetch("/api/companies/admins", token, { method: "GET" });
+}
+
+/**
  * Add a new agency (admin only).
  */
 export async function addAgency(

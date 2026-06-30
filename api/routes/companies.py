@@ -134,10 +134,10 @@ def create_user():
     # Determine target role
     requested_role = payload.get("role", "analyst").strip().lower()
     if g.role == "client_admin":
-        # Client admins can only create analyst users
-        if requested_role != "analyst":
-            return jsonify({"error": "Client admins can only create analyst users."}), 403
-        target_role = "analyst"
+        # Client admins can create analyst or client admin users
+        if requested_role not in ("analyst", "client_admin"):
+            return jsonify({"error": "Client admins can only create analyst or client admin users."}), 403
+        target_role = requested_role
     else:
         # System admin can set any valid role
         if requested_role not in ("admin", "client_admin", "analyst"):
@@ -151,7 +151,10 @@ def create_user():
         if not company_id or company_id == "null":
             company_id = payload.get("company_id")
     
-    if not company_id or company_id == "null":
+    # For target role 'admin', company_id is None/NULL (system admin is not bound to a company)
+    if target_role == "admin":
+        company_id = None
+    elif not company_id or company_id == "null":
         return jsonify({"error": "company_id is required."}), 400
 
     cfg = current_app.config["DASHIFY_CONFIG"]
@@ -338,9 +341,9 @@ def reset_user_password():
             if str(target_company_id) != str(g.company_id):
                 return jsonify({"error": "Forbidden: User belongs to a different company."}), 403
 
-        # Client admins can only reset passwords for analyst users — not other client_admins or system admins
-        if g.role == "client_admin" and target_role != "analyst":
-            return jsonify({"error": "Client admins can only reset analyst passwords."}), 403
+        # Client admins can only reset passwords for analyst or client admin users
+        if g.role == "client_admin" and target_role not in ("analyst", "client_admin"):
+            return jsonify({"error": "Client admins can only reset analyst or client admin passwords."}), 403
 
         # 2. Update user's password in auth
         # Resolve gotrue AdminUserAttributes structure across library versions
@@ -389,9 +392,9 @@ def delete_user(user_id):
             if str(target_company_id) != str(g.company_id):
                 return jsonify({"error": "Forbidden: User belongs to a different company."}), 403
 
-        # Client admins can only delete analyst users — not other client_admins or system admins
-        if g.role == "client_admin" and target_role != "analyst":
-            return jsonify({"error": "Client admins can only remove analyst users."}), 403
+        # Client admins can only delete analyst or client admin users
+        if g.role == "client_admin" and target_role not in ("analyst", "client_admin"):
+            return jsonify({"error": "Client admins can only remove analyst or client admin users."}), 403
 
         # 2. Delete user from auth (cascades and deletes profiles row)
         supabase.auth.admin.delete_user(user_id)
@@ -402,6 +405,55 @@ def delete_user(user_id):
     except Exception as e:
         logger.exception("Error deleting user")
         return jsonify({"error": "An internal error occurred while deleting the user."}), 500
+
+
+@companies_bp.route("/companies/admins", methods=["GET"])
+@require_auth(allowed_roles=["admin"])
+def list_system_admins():
+    """
+    List all system-level admins.
+    """
+    cfg = current_app.config["DASHIFY_CONFIG"]
+    supabase = get_supabase_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
+
+    try:
+        # 1. Fetch profiles where role is 'admin'
+        profiles_res = (
+            supabase.table("profiles")
+            .select("id, role, created_at")
+            .eq("role", "admin")
+            .order("created_at", desc=True)
+            .execute()
+        )
+        profiles = profiles_res.data or []
+
+        if not profiles:
+            return jsonify([]), 200
+
+        # 2. Fetch all auth users to map emails
+        auth_users = supabase.auth.admin.list_users()
+        auth_user_map = {u.id: u for u in auth_users}
+
+        # 3. Combine profiles and auth user data
+        combined_admins = []
+        for p in profiles:
+            user_id = p["id"]
+            u = auth_user_map.get(user_id)
+            email = u.email if u else "Unknown Email"
+
+            combined_admins.append({
+                "id": user_id,
+                "email": email,
+                "role": p["role"],
+                "created_at": p["created_at"]
+            })
+
+        return jsonify(combined_admins), 200
+
+    except Exception as e:
+        logger.exception("Error listing system admins")
+        return jsonify({"error": "An internal error occurred while listing system admins."}), 500
+
 
 
 
