@@ -26,11 +26,11 @@ export default function AdminsManagementPage() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [createAdminSuccess, setCreateAdminSuccess] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
-  
+
   const [searchTerm, setSearchTerm] = useState("");
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [deletingAdminId, setDeletingAdminId] = useState<string | null>(null);
-  
+
   // Password Reset states
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetUserId, setResetUserId] = useState<string | null>(null);
@@ -194,7 +194,7 @@ export default function AdminsManagementPage() {
           // Wait briefly to show the pulsing animation clearly
           await new Promise((resolve) => setTimeout(resolve, 800));
           setAdmins((prev) => prev.filter((a) => a.id !== adminId));
-          
+
           alerts.showAlert({
             title: "Success",
             message: `Admin '${email}' removed successfully.`,
@@ -324,11 +324,11 @@ export default function AdminsManagementPage() {
       <div className="max-w-container-max mx-auto p-lg pt-24">
         {/* Page Header */}
         <div className="flex justify-between items-end mb-lg">
-          <div>
+          <div className="flex-1" style={{ flex: 1, minWidth: 0 }}>
             <h2 className="font-headline-lg text-headline-lg text-on-surface mb-xs">
               Manage Admins
             </h2>
-            <p className="text-on-surface-variant font-body-md">
+            <p className="text-on-surface-variant font-body-md max-w-xl" style={{ maxWidth: "600px", width: "100%" }}>
               Manage platform-level Super Admins and System Admins who configure tenants and settings.
             </p>
           </div>
@@ -651,11 +651,10 @@ export default function AdminsManagementPage() {
                   return (
                     <tr
                       key={admin.id}
-                      className={`transition-colors ${
-                        isDeleting
-                          ? "animate-pulse bg-red-500/10 text-red-300 opacity-60 pointer-events-none"
-                          : "hover:bg-white/5"
-                      }`}
+                      className={`transition-colors ${isDeleting
+                        ? "animate-pulse bg-red-500/10 text-red-300 opacity-60 pointer-events-none"
+                        : "hover:bg-white/5"
+                        }`}
                     >
                       <td className="px-md py-5 text-on-surface text-label-md font-medium">
                         {admin.email}
