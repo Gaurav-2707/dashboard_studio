@@ -20,15 +20,17 @@ export default function AdminsManagementPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newAdminEmail, setNewAdminEmail] = useState("");
   const [newAdminPassword, setNewAdminPassword] = useState("");
+  const [newAdminRole, setNewAdminRole] = useState<"admin" | "super_admin">("admin");
   const [showModalPassword, setShowModalPassword] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createAdminSuccess, setCreateAdminSuccess] = useState(false);
-  
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [deletingAdminId, setDeletingAdminId] = useState<string | null>(null);
-  
+
   // Password Reset states
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetUserId, setResetUserId] = useState<string | null>(null);
@@ -73,7 +75,7 @@ export default function AdminsManagementPage() {
     }
   }
 
-  // Get current session user ID to prevent self-deletion
+  // Get current session user ID and role
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   useEffect(() => {
     async function fetchSession() {
@@ -81,6 +83,14 @@ export default function AdminsManagementPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         setCurrentUserId(session.user.id);
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", session.user.id)
+          .single();
+        if (profile) {
+          setCurrentUserRole(profile.role);
+        }
       }
     }
     fetchSession();
@@ -132,13 +142,13 @@ export default function AdminsManagementPage() {
       const user = await createUser(session.access_token, {
         email: newAdminEmail,
         password: newAdminPassword,
-        role: "admin",
+        role: newAdminRole,
       });
 
       const newAdminRecord: AdminUser = {
         id: user.id,
         email: newAdminEmail,
-        role: "admin",
+        role: user.role,
         created_at: user.created_at,
       };
 
@@ -147,7 +157,7 @@ export default function AdminsManagementPage() {
 
       alerts.showAlert({
         title: "Success",
-        message: `System Admin '${newAdminEmail}' created successfully.`,
+        message: `${newAdminRole === "super_admin" ? "Super Admin" : "System Admin"} '${newAdminEmail}' created successfully.`,
         isDestructive: false,
       });
     } catch (err: any) {
@@ -184,7 +194,7 @@ export default function AdminsManagementPage() {
           // Wait briefly to show the pulsing animation clearly
           await new Promise((resolve) => setTimeout(resolve, 800));
           setAdmins((prev) => prev.filter((a) => a.id !== adminId));
-          
+
           alerts.showAlert({
             title: "Success",
             message: `Admin '${email}' removed successfully.`,
@@ -263,7 +273,7 @@ export default function AdminsManagementPage() {
           </Link>
           <span className="text-outline-variant/60 text-headline-md font-light">/</span>
           <h2 className="font-headline-md text-headline-md font-medium text-on-surface">
-            System Admins
+            Manage Admins
           </h2>
         </div>
 
@@ -277,7 +287,7 @@ export default function AdminsManagementPage() {
               admin_panel_settings
             </span>
             <span className="text-label-sm font-bold text-on-surface-variant">
-              Admin
+              {currentUserRole === "super_admin" ? "Super Admin" : "System Admin"}
             </span>
             <span
               className="material-symbols-outlined text-[16px] text-on-surface-variant transition-transform duration-200"
@@ -291,7 +301,9 @@ export default function AdminsManagementPage() {
             <div className="absolute right-0 top-full mt-2 w-44 bg-surface-container-low border border-outline-variant/20 rounded-xl shadow-2xl overflow-hidden z-50">
               <div className="px-4 py-3 border-b border-outline-variant/10">
                 <p className="text-[11px] text-on-surface-variant uppercase tracking-widest font-bold">Signed in as</p>
-                <p className="text-label-sm font-bold text-on-surface mt-0.5">Admin</p>
+                <p className="text-label-sm font-bold text-on-surface mt-0.5">
+                  {currentUserRole === "super_admin" ? "Super Admin" : "System Admin"}
+                </p>
               </div>
               <form action={signOut}>
                 <button
@@ -312,12 +324,12 @@ export default function AdminsManagementPage() {
       <div className="max-w-container-max mx-auto p-lg pt-24">
         {/* Page Header */}
         <div className="flex justify-between items-end mb-lg">
-          <div>
+          <div className="flex-1" style={{ flex: 1, minWidth: 0 }}>
             <h2 className="font-headline-lg text-headline-lg text-on-surface mb-xs">
-              System Admins
+              Manage Admins
             </h2>
-            <p className="text-on-surface-variant font-body-md">
-              Manage platform-level Super Admins who can configure tenants and system settings.
+            <p className="text-on-surface-variant font-body-md max-w-xl" style={{ maxWidth: "600px", width: "100%" }}>
+              Manage platform-level Super Admins and System Admins who configure tenants and settings.
             </p>
           </div>
           <button
@@ -344,13 +356,14 @@ export default function AdminsManagementPage() {
                       setShowModalPassword(false);
                       setCreateError(null);
                       setCreateAdminSuccess(false);
+                      setNewAdminRole("admin");
                     }}
                     className="absolute top-4 right-4 text-on-surface-variant hover:text-on-surface text-headline-md cursor-pointer bg-transparent border-0 !shadow-none"
                   >
                     ✕
                   </button>
                   <h3 className="font-headline-md text-headline-md font-bold mb-2 text-primary">
-                    New System Admin
+                    New Admin Account
                   </h3>
                   <form onSubmit={handleCreateAdmin} className="space-y-4">
                     <div className="flex flex-col gap-1.5">
@@ -398,6 +411,19 @@ export default function AdminsManagementPage() {
                         </button>
                       </div>
                     </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-label-sm text-on-surface-variant">
+                        Admin Role
+                      </label>
+                      <select
+                        value={newAdminRole}
+                        onChange={(e) => setNewAdminRole(e.target.value as "admin" | "super_admin")}
+                        className="w-full bg-surface-container-lowest border border-outline-variant/30 rounded-lg text-on-surface py-2 px-3 focus:ring-1 focus:ring-primary outline-none text-label-md appearance-none cursor-pointer"
+                      >
+                        <option value="admin">System Admin</option>
+                        <option value="super_admin">Super Admin</option>
+                      </select>
+                    </div>
 
                     {createError && (
                       <p className="text-error text-label-sm">{createError}</p>
@@ -412,6 +438,7 @@ export default function AdminsManagementPage() {
                           setShowModalPassword(false);
                           setCreateError(null);
                           setCreateAdminSuccess(false);
+                          setNewAdminRole("admin");
                         }}
                         className="px-4 py-2 rounded-lg bg-surface-container border border-outline-variant/20 hover:bg-white/5 text-label-md cursor-pointer"
                       >
@@ -566,7 +593,7 @@ export default function AdminsManagementPage() {
           <div className="col-span-12 lg:col-span-4 glass-panel rim-light rounded-xl p-md flex items-center justify-around">
             <div className="text-center">
               <div className="text-on-surface-variant font-label-sm uppercase tracking-wider mb-1">
-                Total System Admins
+                Total Admins
               </div>
               <div className="text-headline-md font-bold text-primary">
                 {admins.length}
@@ -624,19 +651,24 @@ export default function AdminsManagementPage() {
                   return (
                     <tr
                       key={admin.id}
-                      className={`transition-colors ${
-                        isDeleting
-                          ? "animate-pulse bg-red-500/10 text-red-300 opacity-60 pointer-events-none"
-                          : "hover:bg-white/5"
-                      }`}
+                      className={`transition-colors ${isDeleting
+                        ? "animate-pulse bg-red-500/10 text-red-300 opacity-60 pointer-events-none"
+                        : "hover:bg-white/5"
+                        }`}
                     >
                       <td className="px-md py-5 text-on-surface text-label-md font-medium">
                         {admin.email}
                       </td>
                       <td className="px-md py-5">
-                        <span className="px-3 py-1 rounded-full text-[12px] font-bold uppercase tracking-tight bg-primary/20 text-primary">
-                          System Admin
-                        </span>
+                        {admin.role === "super_admin" ? (
+                          <span className="px-3 py-1 rounded-full text-[12px] font-bold uppercase tracking-tight bg-indigo-500/20 text-indigo-400">
+                            Super Admin
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 rounded-full text-[12px] font-bold uppercase tracking-tight bg-primary/20 text-primary">
+                            System Admin
+                          </span>
+                        )}
                       </td>
                       <td className="px-md py-5 text-on-surface-variant font-label-md">
                         {new Date(admin.created_at).toLocaleDateString("en-IN", {

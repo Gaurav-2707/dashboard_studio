@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Sidebar from "@/components/sidebar";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardLayout({
   children,
   params,
@@ -30,7 +32,7 @@ export default async function DashboardLayout({
   ]);
 
   const companyName = companyResult.data?.name || "Unknown";
-  const role = (profileResult.data?.role as "admin" | "client_admin" | "analyst") || "analyst";
+  const role = (profileResult.data?.role as "super_admin" | "admin" | "client_admin" | "analyst") || "analyst";
   const userEmail = user.email || "";
 
   return (

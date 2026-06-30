@@ -47,7 +47,7 @@ def _generate_search_query(model, brand: str, industry: str, table_title: str, a
         return f"{brand} {table_title} India market trends"
 
 @insights_bp.route("/surveys/insights", methods=["POST"])
-@require_auth(allowed_roles=["admin", "client_admin", "analyst"])
+@require_auth(allowed_roles=["super_admin", "admin", "client_admin", "analyst"])
 def generate_insights():
     user_id = g.user_id
     company_id = g.company_id
@@ -73,7 +73,7 @@ def generate_insights():
             supabase.table("parsed_surveys").select("id, company_id, survey_data")
         ).eq("id", survey_id)
         
-        if g.role != "admin":
+        if g.role != "admin" and g.role != "super_admin":
             query = query.eq("company_id", g.company_id)
             
         result = query.limit(1).execute()
@@ -265,7 +265,7 @@ def generate_insights():
 
 
 @insights_bp.route("/surveys/<survey_id>/context", methods=["GET"])
-@require_auth(allowed_roles=["admin", "client_admin", "analyst"])
+@require_auth(allowed_roles=["super_admin", "admin", "client_admin", "analyst"])
 def get_survey_context(survey_id):
     try:
         from services.supabase_client import get_supabase_client
@@ -274,7 +274,7 @@ def get_survey_context(survey_id):
 
         # Verify survey access
         survey_query = supabase.table("parsed_surveys").select("id, company_id").eq("id", survey_id)
-        if g.role != "admin":
+        if g.role != "admin" and g.role != "super_admin":
             survey_query = survey_query.eq("company_id", g.company_id)
         
         survey_res = survey_query.limit(1).execute()
@@ -295,7 +295,7 @@ def get_survey_context(survey_id):
 
 
 @insights_bp.route("/surveys/<survey_id>/context", methods=["POST"])
-@require_auth(allowed_roles=["admin"])
+@require_auth(allowed_roles=["super_admin", "admin"])
 def save_survey_context(survey_id):
     data = request.get_json() or {}
     context_text = data.get("context", "").strip()

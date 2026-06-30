@@ -25,7 +25,7 @@ interface ChartViewerProps {
   filename: string;
   surveyData: SurveyData;
   accessToken: string;
-  role?: "admin" | "client_admin" | "analyst";
+  role?: "super_admin" | "admin" | "client_admin" | "analyst";
   companyId?: string;
 }
 

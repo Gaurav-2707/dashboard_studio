@@ -131,7 +131,7 @@ def require_auth(allowed_roles: list[str] | None = None):
             if not user_id:
                 abort(401, description="Token missing user identity (sub)")
 
-            if (not company_id or company_id == "null") and role != "admin":
+            if (not company_id or company_id == "null") and role not in ("super_admin", "admin"):
                 abort(403, description="User is not assigned to any company")
 
             if not role or role == "unassigned":

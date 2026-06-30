@@ -20,7 +20,7 @@ upload_bp = Blueprint("upload", __name__)
 
 
 @upload_bp.route("/upload", methods=["POST"])
-@require_auth(allowed_roles=["admin", "client_admin", "analyst"])
+@require_auth(allowed_roles=["super_admin", "admin", "client_admin", "analyst"])
 def upload_survey():
     """
     Upload and parse an Excel survey workbook.
@@ -128,7 +128,7 @@ def upload_survey():
 
 
 @upload_bp.route("/surveys/<survey_id>", methods=["GET"])
-@require_auth(allowed_roles=["admin", "client_admin", "analyst"])
+@require_auth(allowed_roles=["super_admin", "admin", "client_admin", "analyst"])
 def get_survey_parsed(survey_id):
     """
     Get the fully parsed survey data by survey_id. On-the-fly parsing.
@@ -142,7 +142,7 @@ def get_survey_parsed(survey_id):
         .select("id, company_id, filename, survey_data, uploaded_at")
         .eq("id", survey_id)
     )
-    if g.role != "admin":
+    if g.role != "admin" and g.role != "super_admin":
         query = query.eq("company_id", g.company_id)
 
     result = query.limit(1).execute()
