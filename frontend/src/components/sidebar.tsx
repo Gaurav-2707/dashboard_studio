@@ -42,6 +42,11 @@ export default function Sidebar({
           href: "/admin",
           icon: "admin_panel_settings",
         },
+        {
+          label: "Manage Admins",
+          href: "/admin/admins",
+          icon: "manage_accounts",
+        },
       ]
       : []),
   ];
@@ -84,9 +89,11 @@ export default function Sidebar({
         <nav className="flex-1 space-y-1 px-sm overflow-y-auto custom-scrollbar">
           {navItems.map((item) => {
             const isActive =
-              item.href.startsWith("/dashboard/")
-                ? pathname === item.href
-                : pathname.startsWith(item.href);
+              item.href === "/admin"
+                ? pathname === "/admin"
+                : item.href.startsWith("/dashboard/")
+                  ? pathname === item.href
+                  : pathname.startsWith(item.href);
 
             return (
               <Link
