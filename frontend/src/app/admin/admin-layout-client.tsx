@@ -7,11 +7,13 @@ export default function AdminLayoutClient({
   companyId,
   companyName,
   userEmail,
+  userRole,
   children,
 }: {
   companyId: string;
   companyName: string;
   userEmail: string;
+  userRole: "super_admin" | "admin" | "client_admin" | "analyst";
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -25,7 +27,7 @@ export default function AdminLayoutClient({
           companyId={companyId}
           companyName={companyName}
           userEmail={userEmail}
-          role="admin"
+          role={userRole}
         />
       </div>
       <main

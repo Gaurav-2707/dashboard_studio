@@ -20,7 +20,7 @@ aggregate_bp = Blueprint("aggregate", __name__)
 
 
 @aggregate_bp.route("/aggregate", methods=["POST"])
-@require_auth(allowed_roles=["admin", "client_admin", "analyst"])
+@require_auth(allowed_roles=["super_admin", "admin", "client_admin", "analyst"])
 def aggregate():
     """
     Compute intersection aggregation for selected columns in a survey table.
@@ -73,7 +73,7 @@ def aggregate():
         .select("id, company_id, survey_data")
         .eq("id", survey_id)
     )
-    if g.role != "admin":
+    if g.role != "admin" and g.role != "super_admin":
         query = query.eq("company_id", g.company_id)  # Tenant isolation
 
     result = query.limit(1).execute()

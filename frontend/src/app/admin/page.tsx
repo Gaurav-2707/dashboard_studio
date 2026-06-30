@@ -23,6 +23,7 @@ export default function AdminPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -40,6 +41,21 @@ export default function AdminPage() {
   }, [showUserMenu]);
 
   useEffect(() => {
+    async function fetchSession() {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", session.user.id)
+          .single();
+        if (profile) {
+          setCurrentUserRole(profile.role);
+        }
+      }
+    }
+    fetchSession();
     loadCompanies();
   }, []);
 
@@ -105,7 +121,7 @@ export default function AdminPage() {
               admin_panel_settings
             </span>
             <span className="text-label-sm font-bold text-on-surface-variant">
-              Admin
+              {currentUserRole === "super_admin" ? "Super Admin" : "System Admin"}
             </span>
             <span
               className="material-symbols-outlined text-[16px] text-on-surface-variant transition-transform duration-200"
@@ -119,7 +135,9 @@ export default function AdminPage() {
             <div className="absolute right-0 top-full mt-2 w-44 bg-surface-container-low border border-outline-variant/20 rounded-xl shadow-2xl overflow-hidden z-50">
               <div className="px-4 py-3 border-b border-outline-variant/10">
                 <p className="text-[11px] text-on-surface-variant uppercase tracking-widest font-bold">Signed in as</p>
-                <p className="text-label-sm font-bold text-on-surface mt-0.5">Admin</p>
+                <p className="text-label-sm font-bold text-on-surface mt-0.5">
+                  {currentUserRole === "super_admin" ? "Super Admin" : "System Admin"}
+                </p>
               </div>
               <form action={signOut}>
                 <button

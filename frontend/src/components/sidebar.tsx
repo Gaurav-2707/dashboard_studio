@@ -11,7 +11,7 @@ interface SidebarProps {
   companyId: string;
   companyName: string;
   userEmail: string;
-  role: "admin" | "client_admin" | "analyst";
+  role: "super_admin" | "admin" | "client_admin" | "analyst";
 }
 
 export default function Sidebar({
@@ -35,13 +35,17 @@ export default function Sidebar({
         },
       ]
       : []),
-    ...(role === "admin"
+    ...(role === "super_admin" || role === "admin"
       ? [
         {
           label: "Admin Panel",
           href: "/admin",
           icon: "admin_panel_settings",
         },
+      ]
+      : []),
+    ...(role === "super_admin"
+      ? [
         {
           label: "Manage Admins",
           href: "/admin/admins",
@@ -133,7 +137,13 @@ export default function Sidebar({
               className="text-on-surface-variant text-[11px] truncate"
               title={userEmail}
             >
-              {role === "admin" ? "System Admin" : role === "client_admin" ? "Client Admin" : "Analyst"}
+              {role === "super_admin"
+                ? "Super Admin"
+                : role === "admin"
+                ? "System Admin"
+                : role === "client_admin"
+                ? "Client Admin"
+                : "Analyst"}
             </span>
           </div>
         </div>

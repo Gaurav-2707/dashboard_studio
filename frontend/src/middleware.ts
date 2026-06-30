@@ -36,7 +36,9 @@ export async function middleware(request: NextRequest) {
       if (user) {
         // Get company_id from user metadata or JWT
         const session = await getSessionClaims(request);
-        if (session?.company_id) {
+        if (session?.role === "admin" || session?.role === "super_admin") {
+          return NextResponse.redirect(new URL("/admin", request.url));
+        } else if (session?.company_id) {
           return NextResponse.redirect(
             new URL(`/dashboard/${session.company_id}`, request.url)
           );
@@ -63,7 +65,7 @@ export async function middleware(request: NextRequest) {
   const companyStatus = claims?.company_status;
 
   // --- Guard: Unassigned users ---
-  if ((!companyId || companyId === "null" || role === "unassigned") && role !== "admin") {
+  if ((!companyId || companyId === "null" || role === "unassigned") && role !== "admin" && role !== "super_admin") {
     // User exists but isn't assigned to a company yet
     if (!pathname.startsWith("/pending")) {
       return NextResponse.redirect(new URL("/pending", request.url));
@@ -74,14 +76,14 @@ export async function middleware(request: NextRequest) {
   // --- Guard: Company in pending_deletion ---
   if (companyStatus === "pending_deletion" && !pathname.startsWith("/admin")) {
     // Allow admins to access admin panel to cancel deletion
-    if (role !== "admin") {
+    if (role !== "admin" && role !== "super_admin") {
       return NextResponse.redirect(new URL("/suspended", request.url));
     }
   }
 
   // --- Guard: Admin routes ---
   if (pathname.startsWith("/admin")) {
-    if (role !== "admin") {
+    if (role !== "admin" && role !== "super_admin") {
       return NextResponse.redirect(
         new URL(`/dashboard/${companyId}`, request.url)
       );
@@ -92,7 +94,7 @@ export async function middleware(request: NextRequest) {
   const dashboardMatch = pathname.match(/^\/dashboard\/([^/]+)/);
   if (dashboardMatch) {
     const urlCompanyId = dashboardMatch[1];
-    if (urlCompanyId !== companyId && role !== "admin") {
+    if (urlCompanyId !== companyId && role !== "admin" && role !== "super_admin") {
       // TAMPER DETECTED: URL company_id doesn't match JWT company_id
       console.warn(
         `[SECURITY] Company ID mismatch: URL=${urlCompanyId}, JWT=${companyId}, User=${user.id}`
@@ -105,7 +107,7 @@ export async function middleware(request: NextRequest) {
 
   // --- Root redirect ---
   if (pathname === "/") {
-    if (role === "admin") {
+    if (role === "admin" || role === "super_admin") {
       return NextResponse.redirect(new URL("/admin", request.url));
     }
     return NextResponse.redirect(

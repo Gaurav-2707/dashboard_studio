@@ -19,7 +19,7 @@ interface DashboardClientProps {
   companyName: string;
   initialSurveys: any[];
   initialProfiles: any[];
-  role: "admin" | "client_admin" | "analyst";
+  role: "super_admin" | "admin" | "client_admin" | "analyst";
   accessToken: string;
 }
 
@@ -91,7 +91,7 @@ export default function DashboardClient({
   };
 
   // Derived permission: can this user manage workspace users?
-  const canManageUsers = role === "admin" || role === "client_admin";
+  const canManageUsers = role === "super_admin" || role === "admin" || role === "client_admin";
 
   // Tab states (for admins and client_admins)
   const [activeTab, setActiveTab] = useState<"surveys" | "users">("surveys");
@@ -389,7 +389,7 @@ export default function DashboardClient({
             Back to Workspace
           </button>
 
-          {role === "admin" && (
+          {(role === "super_admin" || role === "admin") && (
             <DeleteSurveyButton
               surveyId={activeSurveyId}
               companyId={companyId}
@@ -505,7 +505,7 @@ export default function DashboardClient({
       <header className="fixed top-0 right-0 w-[calc(100%-300px)] h-16 bg-surface-dim/80 backdrop-blur-md border-b border-outline-variant/10 z-40 flex items-center justify-between px-gutter">
         <div className="flex items-center gap-4">
           <Link
-            href={role === "admin" ? "/admin" : `/dashboard/${companyId}`}
+            href={role === "super_admin" || role === "admin" ? "/admin" : `/dashboard/${companyId}`}
             className="font-headline-md text-headline-md font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity cursor-pointer"
           >
             PValue Analytics
@@ -523,10 +523,10 @@ export default function DashboardClient({
             id="user-menu-btn"
           >
             <span className="material-symbols-outlined text-[18px] text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
-              {role === "admin" ? "admin_panel_settings" : role === "client_admin" ? "supervised_user_circle" : "person"}
+              {role === "super_admin" || role === "admin" ? "admin_panel_settings" : role === "client_admin" ? "supervised_user_circle" : "person"}
             </span>
             <span className="text-label-sm font-bold text-on-surface-variant">
-              {role === "admin" ? "Admin" : role === "client_admin" ? "Client Admin" : "Analyst"}
+              {role === "super_admin" ? "Super Admin" : role === "admin" ? "Admin" : role === "client_admin" ? "Client Admin" : "Analyst"}
             </span>
             <span className="material-symbols-outlined text-[16px] text-on-surface-variant transition-transform duration-200" style={{ transform: showUserMenu ? "rotate(180deg)" : "rotate(0deg)" }}>
               expand_more
@@ -537,7 +537,9 @@ export default function DashboardClient({
             <div className="absolute right-0 top-full mt-2 w-44 bg-surface-container-low border border-outline-variant/20 rounded-xl shadow-2xl overflow-hidden z-50 animate-fade-in">
               <div className="px-4 py-3 border-b border-outline-variant/10">
                 <p className="text-[11px] text-on-surface-variant uppercase tracking-widest font-bold">Signed in as</p>
-                <p className="text-label-sm font-bold text-on-surface truncate mt-0.5">{role === "admin" ? "Admin" : role === "client_admin" ? "Client Admin" : "Analyst"}</p>
+                <p className="text-label-sm font-bold text-on-surface truncate mt-0.5">
+                  {role === "super_admin" ? "Super Admin" : role === "admin" ? "Admin" : role === "client_admin" ? "Client Admin" : "Analyst"}
+                </p>
               </div>
               <form action={signOut}>
                 <button
@@ -595,7 +597,7 @@ export default function DashboardClient({
                   Select a survey card below to view data charts and run cross-tab analysis.
                 </p>
               </div>
-              {role === "admin" && (
+              {(role === "super_admin" || role === "admin") && (
                 <SurveyUpload
                   companyId={companyId}
                   onUploadSuccess={handleUploadSuccess}
@@ -673,7 +675,7 @@ export default function DashboardClient({
                       }`}
                       id={`survey-card-${survey.id}`}
                     >
-                      {role === "admin" && (
+                      {(role === "super_admin" || role === "admin") && (
                         <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
                           <button
                             onClick={(e) => {
@@ -798,14 +800,21 @@ export default function DashboardClient({
                         </td>
                         <td className="px-md py-5">
                           <span
-                            className={`px-3 py-1 rounded-full text-[12px] font-bold uppercase tracking-tight ${profile.role === "admin"
-                              ? "bg-primary/20 text-primary"
-                              : profile.role === "client_admin"
+                            className={`px-3 py-1 rounded-full text-[12px] font-bold uppercase tracking-tight ${
+                              profile.role === "super_admin"
+                                ? "bg-indigo-500/20 text-indigo-400"
+                                : profile.role === "admin"
+                                ? "bg-primary/20 text-primary"
+                                : profile.role === "client_admin"
                                 ? "bg-tertiary/20 text-tertiary"
                                 : "bg-secondary/20 text-secondary"
-                              }`}
+                            }`}
                           >
-                            {profile.role === "client_admin" ? "client admin" : profile.role}
+                            {profile.role === "super_admin"
+                              ? "super admin"
+                              : profile.role === "client_admin"
+                              ? "client admin"
+                              : profile.role}
                           </span>
                         </td>
                         <td className="px-md py-5 text-on-surface-variant font-label-md">
@@ -818,7 +827,7 @@ export default function DashboardClient({
                         <td className="px-md py-5 text-center">
                           {profile.id === currentUserId ? (
                             <span className="text-[12px] text-on-surface-variant italic font-medium block text-center">Current Session</span>
-                          ) : (role === "client_admin" && profile.role === "admin") ? (
+                          ) : (role !== "super_admin" && (profile.role === "super_admin" || profile.role === "admin")) ? (
                             <span className="text-[12px] text-on-surface-variant italic font-medium block text-center">—</span>
                           ) : (
                             <div className="flex items-center justify-center gap-xs">

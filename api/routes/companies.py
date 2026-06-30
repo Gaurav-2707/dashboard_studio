@@ -17,7 +17,7 @@ companies_bp = Blueprint("companies", __name__)
 
 
 @companies_bp.route("/companies", methods=["POST"])
-@require_auth(allowed_roles=["admin"])
+@require_auth(allowed_roles=["super_admin", "admin"])
 def create_company():
     """
     Create a new company.
@@ -84,7 +84,7 @@ def create_company():
 
 
 @companies_bp.route("/companies", methods=["GET"])
-@require_auth(allowed_roles=["admin"])
+@require_auth(allowed_roles=["super_admin", "admin"])
 def list_companies():
     """
     List all companies. Admin-only.
@@ -104,18 +104,19 @@ def list_companies():
 
 
 @companies_bp.route("/companies/users", methods=["POST"])
-@require_auth(allowed_roles=["admin", "client_admin"])
+@require_auth(allowed_roles=["super_admin", "admin", "client_admin"])
 def create_user():
     """
-    Create a new user. Admin and client_admin can access.
-    Client admins can only create 'analyst' users in their own company.
-    System admins can create users with any role.
+    Create a new user. Super admin, admin, and client_admin can access.
+    Client admins can only create 'analyst' or 'client_admin' users in their own company.
+    System admins can create client_admin and analyst users.
+    Super admins can create any role (including admins and other super admins).
     Expects JSON:
     {
         "email": "analyst@company.com",
         "password": "securepassword",
         "company_id": "uuid",  // optional for tenant admin, required for global admin
-        "role": "analyst"      // optional, defaults to 'analyst'. Only admin can set non-analyst roles.
+        "role": "analyst"      // optional, defaults to 'analyst'
     }
     """
     payload = request.get_json(silent=True)
@@ -138,21 +139,26 @@ def create_user():
         if requested_role not in ("analyst", "client_admin"):
             return jsonify({"error": "Client admins can only create analyst or client admin users."}), 403
         target_role = requested_role
+    elif g.role == "admin":
+        # System admins can create client admin or analyst users
+        if requested_role not in ("client_admin", "analyst"):
+            return jsonify({"error": "System admins can only create client admin or analyst users."}), 403
+        target_role = requested_role
     else:
-        # System admin can set any valid role
-        if requested_role not in ("admin", "client_admin", "analyst"):
-            return jsonify({"error": f"Invalid role: '{requested_role}'. Must be admin, client_admin, or analyst."}), 400
+        # Super admin can set any valid role
+        if requested_role not in ("super_admin", "admin", "client_admin", "analyst"):
+            return jsonify({"error": f"Invalid role: '{requested_role}'. Must be super_admin, admin, client_admin, or analyst."}), 400
         target_role = requested_role
 
     # Determine company_id — non-admin roles MUST use JWT claim, never client input
     company_id = g.company_id
-    if g.role == "admin":
-        # Only system admins (who have no company_id) can specify one
+    if g.role in ("super_admin", "admin"):
+        # Only system/super admins (who have no company_id) can specify one
         if not company_id or company_id == "null":
             company_id = payload.get("company_id")
     
-    # For target role 'admin', company_id is None/NULL (system admin is not bound to a company)
-    if target_role == "admin":
+    # For target roles super_admin/admin, company_id is None/NULL (not bound to a company)
+    if target_role in ("super_admin", "admin"):
         company_id = None
     elif not company_id or company_id == "null":
         return jsonify({"error": "company_id is required."}), 400
@@ -247,7 +253,7 @@ def create_user():
 
 
 @companies_bp.route("/companies/users", methods=["GET"])
-@require_auth(allowed_roles=["admin", "client_admin"])
+@require_auth(allowed_roles=["super_admin", "admin", "client_admin"])
 def list_company_users():
     """
     List all users belonging to a company. Admin-only.
@@ -255,7 +261,7 @@ def list_company_users():
     """
     # Non-admin roles MUST use JWT claim, never client input
     company_id = g.company_id
-    if g.role == "admin":
+    if g.role in ("super_admin", "admin"):
         if not company_id or company_id == "null":
             company_id = request.args.get("company_id")
 
@@ -305,7 +311,7 @@ def list_company_users():
 
 
 @companies_bp.route("/companies/users/reset-password", methods=["POST"])
-@require_auth(allowed_roles=["admin", "client_admin"])
+@require_auth(allowed_roles=["super_admin", "admin", "client_admin"])
 def reset_user_password():
     """
     Reset a user's password. Admin and client_admin can access.
@@ -341,9 +347,10 @@ def reset_user_password():
             if str(target_company_id) != str(g.company_id):
                 return jsonify({"error": "Forbidden: User belongs to a different company."}), 403
 
-        # Client admins can only reset passwords for analyst or client admin users
-        if g.role == "client_admin" and target_role not in ("analyst", "client_admin"):
-            return jsonify({"error": "Client admins can only reset analyst or client admin passwords."}), 403
+        # Client admins and system admins can only reset passwords for analyst or client admin users
+        if g.role in ("client_admin", "admin"):
+            if target_role not in ("analyst", "client_admin"):
+                return jsonify({"error": f"{g.role.replace('_', ' ').capitalize()}s can only reset analyst or client admin passwords."}), 403
 
         # 2. Update user's password in auth
         # Resolve gotrue AdminUserAttributes structure across library versions
@@ -369,7 +376,7 @@ def reset_user_password():
 
 
 @companies_bp.route("/companies/users/<user_id>", methods=["DELETE"])
-@require_auth(allowed_roles=["admin", "client_admin"])
+@require_auth(allowed_roles=["super_admin", "admin", "client_admin"])
 def delete_user(user_id):
     """
     Delete a user from the company workspace. Admin and client_admin can access.
@@ -392,9 +399,10 @@ def delete_user(user_id):
             if str(target_company_id) != str(g.company_id):
                 return jsonify({"error": "Forbidden: User belongs to a different company."}), 403
 
-        # Client admins can only delete analyst or client admin users
-        if g.role == "client_admin" and target_role not in ("analyst", "client_admin"):
-            return jsonify({"error": "Client admins can only remove analyst or client admin users."}), 403
+        # Client admins and system admins can only delete analyst or client admin users
+        if g.role in ("client_admin", "admin"):
+            if target_role not in ("analyst", "client_admin"):
+                return jsonify({"error": f"{g.role.replace('_', ' ').capitalize()}s can only remove analyst or client admin users."}), 403
 
         # 2. Delete user from auth (cascades and deletes profiles row)
         supabase.auth.admin.delete_user(user_id)
@@ -408,7 +416,7 @@ def delete_user(user_id):
 
 
 @companies_bp.route("/companies/admins", methods=["GET"])
-@require_auth(allowed_roles=["admin"])
+@require_auth(allowed_roles=["super_admin"])
 def list_system_admins():
     """
     List all system-level admins.
@@ -417,11 +425,11 @@ def list_system_admins():
     supabase = get_supabase_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
 
     try:
-        # 1. Fetch profiles where role is 'admin'
+        # 1. Fetch profiles where role is 'super_admin' or 'admin'
         profiles_res = (
             supabase.table("profiles")
             .select("id, role, created_at")
-            .eq("role", "admin")
+            .in_("role", ["super_admin", "admin"])
             .order("created_at", desc=True)
             .execute()
         )

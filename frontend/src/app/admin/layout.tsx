@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import AdminLayoutClient from "./admin-layout-client";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminLayout({
   children,
 }: {
@@ -28,7 +30,7 @@ export default async function AdminLayout({
 
   console.log("[ADMIN LAYOUT PROFILE]:", JSON.stringify(profile), "USER ID:", user.id, "ERROR:", error);
 
-  if (!profile || profile.role !== "admin") {
+  if (!profile || (profile.role !== "super_admin" && profile.role !== "admin")) {
     redirect(`/dashboard/${profile?.company_id || ""}`);
   }
 
@@ -49,6 +51,7 @@ export default async function AdminLayout({
       companyId={profile.company_id || ""}
       companyName={companyName}
       userEmail={user.email || ""}
+      userRole={profile.role as any}
     >
       {children}
     </AdminLayoutClient>

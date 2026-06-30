@@ -85,7 +85,7 @@ class TestResetUserPassword:
         mock_get_supabase.return_value = mock_supabase
 
         mock_profile_query = MagicMock()
-        mock_profile_query.execute.return_value = MagicMock(data=[{"company_id": "company-456", "role": "client_admin"}])
+        mock_profile_query.execute.return_value = MagicMock(data=[{"company_id": "company-456", "role": "admin"}])
         mock_supabase.table.return_value.select.return_value.eq.return_value = mock_profile_query
 
         token = make_token({"user_role": "client_admin", "company_id": "company-456"})
@@ -96,20 +96,61 @@ class TestResetUserPassword:
         )
 
         assert resp.status_code == 403
-        assert "only reset analyst passwords" in resp.get_json()["error"]
+        assert "only reset analyst or client admin passwords" in resp.get_json()["error"]
 
     @patch("routes.companies.get_supabase_client")
-    def test_global_admin_can_reset_any_role_and_company(self, mock_get_supabase, client):
+    def test_client_admin_can_reset_client_admin_same_company(self, mock_get_supabase, client):
         mock_supabase = MagicMock()
         mock_get_supabase.return_value = mock_supabase
 
         mock_profile_query = MagicMock()
-        mock_profile_query.execute.return_value = MagicMock(data=[{"company_id": "company-999", "role": "client_admin"}])
+        mock_profile_query.execute.return_value = MagicMock(data=[{"company_id": "company-456", "role": "client_admin"}])
         mock_supabase.table.return_value.select.return_value.eq.return_value = mock_profile_query
 
         mock_supabase.auth.admin.update_user_by_id = MagicMock()
 
+        token = make_token({"user_role": "client_admin", "company_id": "company-456"})
+        resp = client.post(
+            "/api/companies/users/reset-password",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"user_id": "target-user-123", "password": "new-secure-password"}
+        )
+
+        assert resp.status_code == 200
+        assert resp.get_json()["success"] is True
+        mock_supabase.auth.admin.update_user_by_id.assert_called_once()
+
+    @patch("routes.companies.get_supabase_client")
+    def test_system_admin_cannot_reset_admin_roles(self, mock_get_supabase, client):
+        mock_supabase = MagicMock()
+        mock_get_supabase.return_value = mock_supabase
+
+        mock_profile_query = MagicMock()
+        mock_profile_query.execute.return_value = MagicMock(data=[{"company_id": "company-456", "role": "admin"}])
+        mock_supabase.table.return_value.select.return_value.eq.return_value = mock_profile_query
+
         token = make_token({"user_role": "admin", "company_id": None})
+        resp = client.post(
+            "/api/companies/users/reset-password",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"user_id": "target-user-123", "password": "new-secure-password"}
+        )
+
+        assert resp.status_code == 403
+        assert "only reset analyst or client admin passwords" in resp.get_json()["error"]
+
+    @patch("routes.companies.get_supabase_client")
+    def test_super_admin_can_reset_any_role_and_company(self, mock_get_supabase, client):
+        mock_supabase = MagicMock()
+        mock_get_supabase.return_value = mock_supabase
+
+        mock_profile_query = MagicMock()
+        mock_profile_query.execute.return_value = MagicMock(data=[{"company_id": "company-999", "role": "admin"}])
+        mock_supabase.table.return_value.select.return_value.eq.return_value = mock_profile_query
+
+        mock_supabase.auth.admin.update_user_by_id = MagicMock()
+
+        token = make_token({"user_role": "super_admin", "company_id": None})
         resp = client.post(
             "/api/companies/users/reset-password",
             headers={"Authorization": f"Bearer {token}"},
@@ -130,7 +171,7 @@ class TestResetUserPassword:
         assert resp.status_code == 403
 
     def test_validation_checks(self, client):
-        token = make_token({"user_role": "admin", "company_id": None})
+        token = make_token({"user_role": "super_admin", "company_id": None})
         
         # Missing payload
         resp = client.post(
