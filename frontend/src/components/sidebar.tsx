@@ -60,7 +60,7 @@ export default function Sidebar({
       {/* Brand Header */}
       <div className="px-md mb-xl">
         <Link
-          href={role === "admin" ? "/admin" : `/dashboard/${companyId}`}
+          href={role === "super_admin" || role === "admin" ? "/admin" : `/dashboard/${companyId}`}
           className="flex items-center gap-xs hover:opacity-90 transition-opacity cursor-pointer group"
         >
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-primary to-secondary flex items-center justify-center">
