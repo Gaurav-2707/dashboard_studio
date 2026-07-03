@@ -5,8 +5,10 @@ Dashify Flask API — Application Factory
 import logging
 from dotenv import load_dotenv
 
-# Load environment variables from .env file (if present)
-load_dotenv(override=True)
+import os
+# Load environment variables from the absolute path of the .env file (if present)
+basedir = os.path.abspath(os.path.dirname(__file__))
+load_dotenv(os.path.join(basedir, ".env"), override=True)
 
 import os
 from logging.handlers import RotatingFileHandler
