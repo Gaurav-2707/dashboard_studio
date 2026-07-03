@@ -48,47 +48,22 @@ def require_auth(allowed_roles: list[str] | None = None):
             # --- 2. Decode and verify JWT ---
             cfg = current_app.config.get("DASHIFY_CONFIG")
             jwt_secret = cfg.SUPABASE_JWT_SECRET if cfg else ""
-
-            if not jwt_secret:
-                logger.error("SUPABASE_JWT_SECRET is not configured")
-                abort(500, description="Server misconfiguration")
-
-            # Try decoding with base64 decoded secret first (Supabase default),
-            # then fall back to the raw secret (useful for tests or custom secrets).
             payload = None
             last_err = None
 
-            # Attempt 1: Base64 decoded secret
-            import base64
-            try:
-                missing_padding = len(jwt_secret) % 4
-                padded_secret = jwt_secret
-                if missing_padding:
-                    padded_secret += '=' * (4 - missing_padding)
-                decoded_secret = base64.b64decode(padded_secret)
-                payload = jwt.decode(
-                    token,
-                    decoded_secret,
-                    algorithms=["HS256"],
-                    options={
-                        "require": ["exp", "sub"],
-                        "verify_exp": True,
-                        "verify_iat": True,
-                    },
-                )
-            except jwt.ExpiredSignatureError as e:
-                # If it expired, it was signed correctly but is just old
-                logger.info("JWT has expired")
-                abort(401, description="Token has expired")
-            except Exception as e:
-                last_err = e
-
-            # Attempt 2: Raw secret (fallback)
-            if payload is None:
+            # Attempt Local Verification if secret is available
+            if jwt_secret:
+                # Attempt 1: Base64 decoded secret
+                import base64
                 try:
+                    missing_padding = len(jwt_secret) % 4
+                    padded_secret = jwt_secret
+                    if missing_padding:
+                        padded_secret += '=' * (4 - missing_padding)
+                    decoded_secret = base64.b64decode(padded_secret)
                     payload = jwt.decode(
                         token,
-                        jwt_secret,
+                        decoded_secret,
                         algorithms=["HS256"],
                         options={
                             "require": ["exp", "sub"],
@@ -97,31 +72,92 @@ def require_auth(allowed_roles: list[str] | None = None):
                         },
                     )
                 except jwt.ExpiredSignatureError:
-                    logger.info("JWT has expired")
-                    abort(401, description="Token has expired")
+                    logger.info("JWT has expired during local verification (Base64)")
+                    abort(401, description="Unauthorized")
                 except Exception as e:
                     last_err = e
 
+                # Attempt 2: Raw secret (fallback)
+                if payload is None:
+                    try:
+                        payload = jwt.decode(
+                            token,
+                            jwt_secret,
+                            algorithms=["HS256"],
+                            options={
+                                "require": ["exp", "sub"],
+                                "verify_exp": True,
+                                "verify_iat": True,
+                            },
+                        )
+                    except jwt.ExpiredSignatureError:
+                        logger.info("JWT has expired during local verification (Raw)")
+                        abort(401, description="Unauthorized")
+                    except Exception as e:
+                        last_err = e
+            else:
+                last_err = Exception("SUPABASE_JWT_SECRET is not configured; local verification skipped")
+
             # Attempt 3: Remote verification via Supabase Auth (final fallback)
             if payload is None:
+                if not cfg.SUPABASE_URL or not cfg.SUPABASE_SERVICE_ROLE_KEY:
+                    logger.error("SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing; cannot perform remote verification fallback.")
+                    abort(500, description="Internal server error")
+
                 try:
                     from services.supabase_client import get_supabase_client
                     # Initialize client with public URL and service role key
                     supabase_client = get_supabase_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
                     user_resp = supabase_client.auth.get_user(token)
+                    
                     if user_resp and user_resp.user:
-                        # Since remote verification passed, we can safely decode claims locally without signature verification
-                        payload = jwt.decode(
-                            token,
-                            options={"verify_signature": False},
-                            algorithms=["HS256"]
+                        user_id = user_resp.user.id
+                        # Securely retrieve user role and company binding from DB
+                        profile_res = (
+                            supabase_client.table("profiles")
+                            .select("company_id, role")
+                            .eq("id", user_id)
+                            .single()
+                            .execute()
                         )
+                        if not profile_res.data:
+                            logger.warning(f"No profile found for remotely verified user {user_id}")
+                            abort(403, description="Forbidden")
+                        
+                        company_id = profile_res.data.get("company_id")
+                        role = profile_res.data.get("role")
+                        
+                        # Validate company status if not admin
+                        if role not in ("super_admin", "admin"):
+                            company_res = (
+                                supabase_client.table("companies")
+                                .select("status")
+                                .eq("id", company_id)
+                                .single()
+                                .execute()
+                            )
+                            if company_res.data and company_res.data.get("status") == "pending_deletion":
+                                logger.warning(f"User {user_id} belongs to suspended company {company_id}")
+                                abort(403, description="Forbidden")
+
+                        payload = {
+                            "sub": user_id,
+                            "company_id": company_id,
+                            "user_role": role,
+                        }
+                    else:
+                        logger.warning("Remote verification did not return a valid user")
+                        abort(401, description="Unauthorized")
+
                 except Exception as e:
-                    logger.warning(f"Remote token verification failed: {e} (base64 error: {last_err})")
-                    abort(401, description="Invalid token")
+                    if hasattr(e, 'code'):
+                        # Propagate aborts from within try block
+                        raise
+                    logger.warning(f"Remote token verification failed: {e} (base64 local error: {last_err})")
+                    abort(401, description="Unauthorized")
 
             if payload is None:
-                abort(401, description="Invalid token")
+                abort(401, description="Unauthorized")
 
             # --- 3. Extract claims ---
             user_id = payload.get("sub")
@@ -129,21 +165,24 @@ def require_auth(allowed_roles: list[str] | None = None):
             role = payload.get("user_role")
 
             if not user_id:
-                abort(401, description="Token missing user identity (sub)")
+                logger.error("Token missing user identity (sub) claim")
+                abort(401, description="Unauthorized")
 
             if (not company_id or company_id == "null") and role not in ("super_admin", "admin"):
-                abort(403, description="User is not assigned to any company")
+                logger.warning(f"User {user_id} with role '{role}' is not assigned to any company")
+                abort(403, description="Forbidden")
 
             if not role or role == "unassigned":
-                abort(403, description="User has no assigned role")
+                logger.warning(f"User {user_id} has no assigned role")
+                abort(403, description="Forbidden")
 
             # --- 4. Role enforcement ---
-            if allowed_roles and role not in allowed_roles:
+            if allowed_roles and role not in allowed_roles and role not in ("super_admin", "admin"):
                 logger.warning(
                     f"Role '{role}' not in allowed_roles {allowed_roles} "
                     f"for user {user_id}"
                 )
-                abort(403, description=f"Insufficient permissions.")
+                abort(403, description="Forbidden")
 
             # --- 5. Populate request context ---
             g.user_id = user_id

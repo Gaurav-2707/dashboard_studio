@@ -35,9 +35,23 @@ def create_app(config: Config | None = None) -> Flask:
 
     # Load config
     cfg = config or Config()
-    missing = cfg.validate()
-    if missing:
-        logging.warning(f"Missing required environment variables: {', '.join(missing)}")
+    missing_required = []
+    if not cfg.SUPABASE_URL:
+        missing_required.append("SUPABASE_URL")
+    if not cfg.SUPABASE_SERVICE_ROLE_KEY:
+        missing_required.append("SUPABASE_SERVICE_ROLE_KEY")
+
+    if missing_required:
+        raise RuntimeError(
+            f"CRITICAL CONFIGURATION ERROR: Missing required environment variables: {', '.join(missing_required)}. "
+            "Application startup aborted for security."
+        )
+
+    if not cfg.SUPABASE_JWT_SECRET:
+        logging.warning(
+            "SUPABASE_JWT_SECRET is not configured. Local JWT verification is disabled; "
+            "falling back to remote token verification via Supabase API."
+        )
 
     app.config["MAX_CONTENT_LENGTH"] = cfg.MAX_CONTENT_LENGTH
     app.config["DASHIFY_CONFIG"] = cfg
@@ -61,6 +75,16 @@ def create_app(config: Config | None = None) -> Flask:
     app.register_blueprint(aggregate_bp, url_prefix="/api")
     app.register_blueprint(companies_bp, url_prefix="/api")
     app.register_blueprint(insights_bp, url_prefix="/api")
+
+    @app.after_request
+    def set_security_headers(response):
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+        return response
 
     # Health check
     @app.route("/api/health", methods=["GET"])
