@@ -3,7 +3,7 @@ name: Deploy Backend to EC2
 on:
   push:
     branches:
-      - testing  # Automatically runs when you push to the testing branch
+      - main  # Automatically runs when you push to the main branch
 
 jobs:
   deploy:
