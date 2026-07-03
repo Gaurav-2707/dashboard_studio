@@ -112,10 +112,10 @@ def require_auth(allowed_roles: list[str] | None = None):
                     
                     if user_resp and user_resp.user:
                         user_id = user_resp.user.id
-                        # Securely retrieve user role and company binding from DB
+                        # Securely retrieve user role and company binding (with status check) in 1 query via join
                         profile_res = (
                             supabase_client.table("profiles")
-                            .select("company_id, role")
+                            .select("company_id, role, companies(status)")
                             .eq("id", user_id)
                             .single()
                             .execute()
@@ -129,14 +129,8 @@ def require_auth(allowed_roles: list[str] | None = None):
                         
                         # Validate company status if not admin
                         if role not in ("super_admin", "admin"):
-                            company_res = (
-                                supabase_client.table("companies")
-                                .select("status")
-                                .eq("id", company_id)
-                                .single()
-                                .execute()
-                            )
-                            if company_res.data and company_res.data.get("status") == "pending_deletion":
+                            company_data = profile_res.data.get("companies")
+                            if company_data and company_data.get("status") == "pending_deletion":
                                 logger.warning(f"User {user_id} belongs to suspended company {company_id}")
                                 abort(403, description="Forbidden")
 
