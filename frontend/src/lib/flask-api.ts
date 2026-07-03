@@ -11,7 +11,11 @@ import type {
   UploadResponse,
 } from "./types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+// On the client side (browser), use relative paths to leverage Next.js rewrites/proxy.
+// On the server side (SSR / Server Actions), use the private server-only FLASK_API_URL environment variable.
+const API_URL = typeof window !== "undefined"
+  ? ""
+  : (process.env.FLASK_API_URL || "http://localhost:5000");
 
 class FlaskAPIError extends Error {
   constructor(
