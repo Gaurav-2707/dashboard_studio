@@ -10,11 +10,13 @@ import type {
   CreateCompanyResponse,
   UploadResponse,
 } from "./types";
+import { createClient as createBrowserSupabaseClient } from "./supabase/client";
 
-// On the client side (browser), use relative paths to leverage Next.js rewrites/proxy.
-// On the server side (SSR / Server Actions), use the private server-only FLASK_API_URL environment variable.
+// On the client side (browser), use the public Flask API URL (which will be HTTPS).
+// If empty, falls back to the Next.js rewrite proxy (/api/...).
+// On the server side (SSR / Server Actions), use the private server-only FLASK_API_URL.
 const API_URL = typeof window !== "undefined"
-  ? ""
+  ? (process.env.NEXT_PUBLIC_API_URL || "")
   : (process.env.FLASK_API_URL || "http://localhost:5000");
 
 class FlaskAPIError extends Error {
@@ -71,19 +73,37 @@ export async function uploadSurvey(
   companyId?: string,
   customFilename?: string
 ): Promise<UploadResponse> {
-  const formData = new FormData();
-  formData.append("file", file);
-  if (companyId) {
-    formData.append("company_id", companyId);
-  }
-  if (customFilename) {
-    formData.append("filename", customFilename);
+  const supabase = createBrowserSupabaseClient();
+  
+  // Format filepath as: companyId/timestamp_filename
+  const targetCompanyId = companyId || "global";
+  const timestamp = Date.now();
+  const filePath = `${targetCompanyId}/${timestamp}_${file.name}`;
+
+  // Upload to Supabase Storage surveys bucket
+  const { data: storageData, error: storageError } = await supabase.storage
+    .from("surveys")
+    .upload(filePath, file, {
+      cacheControl: "3600",
+      upsert: true,
+    });
+
+  if (storageError) {
+    console.error("Supabase Storage upload failed:", storageError);
+    throw new Error(`Failed to upload to storage: ${storageError.message}`);
   }
 
+  // Send the file path to Flask API for parsing and saving
   return apiFetch<UploadResponse>("/api/upload", token, {
     method: "POST",
-    body: formData,
-    // Don't set Content-Type — let the browser set it with the boundary
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      file_path: storageData.path,
+      company_id: companyId,
+      filename: customFilename || file.name,
+    }),
   });
 }
 
