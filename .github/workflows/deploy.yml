@@ -1,0 +1,36 @@
+name: Deploy Backend to EC2
+
+on:
+  push:
+    branches:
+      - testing  # Automatically runs when you push to the testing branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            # Navigate to the repository on the EC2 server
+            cd /home/ubuntu/dashboard_studio
+            
+            # Pull the latest changes from the branch
+            git pull origin testing
+            
+            # Update Python packages inside the virtual environment
+            cd api
+            source venv/bin/activate
+            pip install -r requirements.txt
+            
+            # Restart the Gunicorn system service to apply changes
+            sudo systemctl restart dashify-api
