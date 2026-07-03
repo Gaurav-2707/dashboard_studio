@@ -148,6 +148,13 @@ def upload_survey():
 
     record = insert_result.data[0]
 
+    # --- 9. Clean up temporary file from Supabase Storage (if JSON upload) ---
+    if request.is_json and file_path:
+        try:
+            supabase.storage.from_("surveys").remove([file_path])
+        except Exception as e:
+            logger.warning(f"Failed to delete temporary storage file {file_path}: {e}")
+
 
     logger.info(
         f"Survey uploaded raw: {filename} "
