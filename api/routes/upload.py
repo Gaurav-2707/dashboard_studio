@@ -28,6 +28,13 @@ def upload_survey():
     Expects: Either JSON payload with 'file_path' or multipart/form-data with 'file'.
     Returns: { survey_id, filename, table_count, is_duplicate }
     """
+    logger.info(f"Upload endpoint triggered. Content-Type: {request.content_type}, is_json: {request.is_json}")
+    try:
+        raw_body = request.get_data(as_text=True)
+        logger.info(f"Raw Request Body: {raw_body[:500]}")
+    except Exception as e:
+        logger.warning(f"Failed to read raw request body: {e}")
+
     cfg = current_app.config["DASHIFY_CONFIG"]
     supabase = get_supabase_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
 
