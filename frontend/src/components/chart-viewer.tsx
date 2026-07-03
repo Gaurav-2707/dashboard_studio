@@ -118,7 +118,7 @@ export default function ChartViewer({
   const [topN, setTopN] = useState(20);
   const [chartTitle, setChartTitle] = useState("");
   const [axisLabel, setAxisLabel] = useState("Percentage (%)");
-  const [paletteName, setPaletteName] = useState("Default");
+  const [paletteName, setPaletteName] = useState("Maruti");
   const [chartSizeName, setChartSizeName] = useState<"Small" | "Medium" | "Large">("Medium");
   const [showLabels, setShowLabels] = useState(true);
   const [roundValues, setRoundValues] = useState(true);
