@@ -350,12 +350,6 @@ export default function DashboardClient({
   }, [activeSurveyId, accessToken]);
 
   const handleUploadSuccess = (surveyId: string, filename: string) => {
-    const newSurvey = {
-      id: surveyId,
-      filename: filename,
-      uploaded_at: new Date().toISOString(),
-    };
-    setSurveys((prev) => [newSurvey, ...prev]);
     router.refresh();
     alerts.showAlert({
       title: "Success",
