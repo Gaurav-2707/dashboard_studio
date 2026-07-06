@@ -124,6 +124,7 @@ export default function ChartViewer({
   const [roundValues, setRoundValues] = useState(true);
   const [showGridlines, setShowGridlines] = useState(true);
   const [labelRotation, setLabelRotation] = useState(35);
+  const [chartFontSize, setChartFontSize] = useState(12);
   const [showCustomization, setShowCustomization] = useState(false);
   const [showTablePreview, setShowTablePreview] = useState(false);
 
@@ -426,10 +427,11 @@ export default function ChartViewer({
       font: {
         family: '"Hanken Grotesk", "Inter", "Helvetica Neue", Arial, sans-serif',
         color: "#475569",
+        size: chartFontSize,
       },
       title: {
         text: `<b>${wrappedTitle}</b>`,
-        font: { size: 15, color: "#333333", family: '"Hanken Grotesk", "Inter", sans-serif' },
+        font: { size: chartFontSize + 3, color: "#333333", family: '"Hanken Grotesk", "Inter", sans-serif' },
         xref: "paper" as const,
         yref: "container" as const,
         x: 0.5,
@@ -446,8 +448,8 @@ export default function ChartViewer({
         linewidth: 0.5,
         automargin: true,
         tickangle: chartType === "Horizontal bar" ? undefined : -labelRotation,
-        title: chartType === "Horizontal bar" ? { text: axisLabel, font: { size: 11, color: "#475569", family: '"Inter", sans-serif' } } : undefined,
-        tickfont: { size: 10, color: "#475569", family: '"Inter", sans-serif' },
+        title: chartType === "Horizontal bar" ? { text: axisLabel, font: { size: chartFontSize - 1, color: "#475569", family: '"Inter", sans-serif' } } : undefined,
+        tickfont: { size: chartFontSize - 2, color: "#475569", family: '"Inter", sans-serif' },
       },
       yaxis: {
         showgrid: showGridlines,
@@ -457,8 +459,8 @@ export default function ChartViewer({
         linecolor: "#cbd5e1",
         linewidth: 0.5,
         automargin: true,
-        title: chartType !== "Horizontal bar" ? { text: axisLabel, font: { size: 11, color: "#475569", family: '"Inter", sans-serif' } } : undefined,
-        tickfont: { size: 10, color: "#475569", family: '"Inter", sans-serif' },
+        title: chartType !== "Horizontal bar" ? { text: axisLabel, font: { size: chartFontSize - 1, color: "#475569", family: '"Inter", sans-serif' } } : undefined,
+        tickfont: { size: chartFontSize - 2, color: "#475569", family: '"Inter", sans-serif' },
       },
       showlegend: true,
       legend: {
@@ -469,10 +471,10 @@ export default function ChartViewer({
         y: 0.5,
         xanchor: "left" as const,
         yanchor: "middle" as const,
-        font: { size: 10, family: '"Inter", sans-serif' },
+        font: { size: chartFontSize - 2, family: '"Inter", sans-serif' },
       },
     }),
-    [width, plotHeight, wrappedTitle, showGridlines, labelRotation, axisLabel, chartType]
+    [width, plotHeight, wrappedTitle, showGridlines, labelRotation, axisLabel, chartType, chartFontSize]
   );
 
   const uniqueAnswers = new Set(chartData.map((d) => d.answer));
@@ -808,6 +810,21 @@ export default function ChartViewer({
                 step={5}
                 value={labelRotation}
                 onChange={(e) => setLabelRotation(parseInt(e.target.value))}
+                className="w-full accent-primary h-1 bg-white/10 rounded-lg cursor-pointer"
+              />
+            </div>
+            <div className="space-y-1">
+              <div className="flex justify-between text-label-sm text-on-surface-variant">
+                <span>Text Size</span>
+                <span className="text-primary">{chartFontSize}px</span>
+              </div>
+              <input
+                type="range"
+                min={8}
+                max={24}
+                step={1}
+                value={chartFontSize}
+                onChange={(e) => setChartFontSize(parseInt(e.target.value))}
                 className="w-full accent-primary h-1 bg-white/10 rounded-lg cursor-pointer"
               />
             </div>
