@@ -319,6 +319,9 @@ export default function ChartViewer({
           values,
           textinfo: "label+percent",
           textposition: "inside",
+          marker: {
+            colors: answers.map((_, i) => colors[i % colors.length]),
+          },
         };
       }
 
