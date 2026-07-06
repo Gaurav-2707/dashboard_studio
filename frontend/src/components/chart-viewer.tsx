@@ -125,6 +125,7 @@ export default function ChartViewer({
   const [showGridlines, setShowGridlines] = useState(true);
   const [labelRotation, setLabelRotation] = useState(35);
   const [chartFontSize, setChartFontSize] = useState(12);
+  const [legendPosition, setLegendPosition] = useState("Outside Right");
   const [showCustomization, setShowCustomization] = useState(false);
   const [showTablePreview, setShowTablePreview] = useState(false);
 
@@ -411,6 +412,29 @@ export default function ChartViewer({
     }
   }, [selectedTableId, chartType, activeColumns, width, plotHeight]);
 
+  const legendConfig = useMemo(() => {
+    const configMap: Record<
+      string,
+      {
+        x: number;
+        y: number;
+        xanchor: "left" | "right" | "center";
+        yanchor: "top" | "bottom" | "middle";
+        orientation: "h" | "v";
+        show: boolean;
+      }
+    > = {
+      "Outside Right": { x: 1.02, y: 0.5, xanchor: "left", yanchor: "middle", orientation: "v", show: true },
+      "Inside Top Right": { x: 0.98, y: 0.98, xanchor: "right", yanchor: "top", orientation: "v", show: true },
+      "Inside Top Left": { x: 0.02, y: 0.98, xanchor: "left", yanchor: "top", orientation: "v", show: true },
+      "Inside Bottom Right": { x: 0.98, y: 0.02, xanchor: "right", yanchor: "bottom", orientation: "v", show: true },
+      "Inside Bottom Left": { x: 0.02, y: 0.02, xanchor: "left", yanchor: "bottom", orientation: "v", show: true },
+      "Outside Bottom": { x: 0.5, y: -0.22, xanchor: "center", yanchor: "top", orientation: "h", show: true },
+      "Hidden": { x: 0, y: 0, xanchor: "left", yanchor: "top", orientation: "v", show: false },
+    };
+    return configMap[legendPosition] || configMap["Outside Right"];
+  }, [legendPosition]);
+
   const layout = useMemo(
     () => ({
       autosize: true,
@@ -419,7 +443,9 @@ export default function ChartViewer({
         l: chartType === "Horizontal bar" ? 200 : 100,
         r: 50,
         t: 55,
-        b: chartType === "Horizontal bar" ? 60 : 120,
+        b: legendPosition === "Outside Bottom"
+          ? (chartType === "Horizontal bar" ? 120 : 180)
+          : (chartType === "Horizontal bar" ? 60 : 120),
       },
       plot_bgcolor: "white",
       paper_bgcolor: "white",
@@ -462,19 +488,20 @@ export default function ChartViewer({
         title: chartType !== "Horizontal bar" ? { text: axisLabel, font: { size: chartFontSize - 1, color: "#475569", family: '"Inter", sans-serif' } } : undefined,
         tickfont: { size: chartFontSize - 2, color: "#475569", family: '"Inter", sans-serif' },
       },
-      showlegend: true,
+      showlegend: legendConfig.show,
       legend: {
         bgcolor: "rgba(255,255,255,0.9)",
         bordercolor: "#e2e8f0",
         borderwidth: 0.5,
-        x: 1.02,
-        y: 0.5,
-        xanchor: "left" as const,
-        yanchor: "middle" as const,
+        x: legendConfig.x,
+        y: legendConfig.y,
+        xanchor: legendConfig.xanchor,
+        yanchor: legendConfig.yanchor,
+        orientation: legendConfig.orientation as "h" | "v",
         font: { size: chartFontSize - 2, family: '"Inter", sans-serif' },
       },
     }),
-    [width, plotHeight, wrappedTitle, showGridlines, labelRotation, axisLabel, chartType, chartFontSize]
+    [width, plotHeight, wrappedTitle, showGridlines, labelRotation, axisLabel, chartType, chartFontSize, legendPosition, legendConfig]
   );
 
   const uniqueAnswers = new Set(chartData.map((d) => d.answer));
@@ -769,6 +796,22 @@ export default function ChartViewer({
                 <option>Small</option>
                 <option>Medium</option>
                 <option>Large</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-label-sm text-on-surface-variant">Legend Position</label>
+              <select
+                value={legendPosition}
+                onChange={(e) => setLegendPosition(e.target.value)}
+                className="bg-surface-container-high/60 border border-outline-variant/30 rounded-lg text-on-surface py-1.5 px-2 text-[11px] outline-none"
+              >
+                <option>Outside Right</option>
+                <option>Inside Top Right</option>
+                <option>Inside Top Left</option>
+                <option>Inside Bottom Right</option>
+                <option>Inside Bottom Left</option>
+                <option>Outside Bottom</option>
+                <option>Hidden</option>
               </select>
             </div>
             <div className="flex items-center justify-between">
