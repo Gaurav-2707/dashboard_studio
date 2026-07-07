@@ -150,6 +150,7 @@ export default function ChartViewer({
       const title = selectedTable.title || `Table ${selectedTableId}`;
       setQuestionSearch(title);
       currentTableTitleRef.current = title;
+      setChartTitle(""); // Reset custom chart title on table change
     }
   }, [selectedTableId, selectedTable]);
 
@@ -307,6 +308,7 @@ export default function ChartViewer({
       const filtered = displayData.filter((d) => d.topBreak === breakName);
       const answers = filtered.map((d) => d.answer);
       const values = filtered.map((d) => d.value);
+      const wrappedAnswers = answers.map((ans) => wrapText(ans, 20).join("<br>"));
 
       const baseTrace: Record<string, unknown> = {
         name: wrapText(breakName, 22).join("<br>"),
@@ -317,7 +319,7 @@ export default function ChartViewer({
         return {
           ...baseTrace,
           type: "pie" as const,
-          labels: answers,
+          labels: wrappedAnswers,
           values,
           textinfo: "label+percent",
           textposition: "inside",
@@ -332,7 +334,7 @@ export default function ChartViewer({
           ...baseTrace,
           type: "bar" as const,
           x: values,
-          y: answers,
+          y: wrappedAnswers,
           orientation: "h" as const,
           text: showLabels
             ? values.map((v) => (roundValues ? v.toFixed(0) : v.toFixed(2)))
@@ -347,7 +349,7 @@ export default function ChartViewer({
           ...baseTrace,
           type: "scatter" as const,
           mode: "lines+markers" as const,
-          x: answers,
+          x: wrappedAnswers,
           y: values,
           text: showLabels
             ? values.map((v) => (roundValues ? v.toFixed(0) : v.toFixed(2)))
@@ -360,7 +362,7 @@ export default function ChartViewer({
       return {
         ...baseTrace,
         type: "bar" as const,
-        x: answers,
+        x: wrappedAnswers,
         y: values,
         text: showLabels
           ? values.map((v) => (roundValues ? v.toFixed(0) : v.toFixed(2)))
@@ -759,7 +761,7 @@ export default function ChartViewer({
               <label className="text-label-sm text-on-surface-variant">Custom Title</label>
               <input
                 type="text"
-                value={chartTitle}
+                value={chartTitle || defaultTitle}
                 onChange={(e) => setChartTitle(e.target.value)}
                 placeholder={defaultTitle}
                 className="bg-surface-container-high/60 border border-outline-variant/30 rounded-lg text-on-surface py-1.5 px-3 text-[11px] outline-none"
