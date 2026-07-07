@@ -468,6 +468,7 @@ export default function ChartViewer({
         yanchor: "top" as const,
       },
       xaxis: {
+        type: chartType !== "Horizontal bar" ? ("category" as const) : undefined,
         showgrid: showGridlines,
         gridcolor: "#f1f5f9",
         showline: true,
@@ -480,6 +481,7 @@ export default function ChartViewer({
         tickfont: { size: chartFontSize - 2, color: "#475569", family: '"Inter", sans-serif' },
       },
       yaxis: {
+        type: chartType === "Horizontal bar" ? ("category" as const) : undefined,
         showgrid: showGridlines,
         gridcolor: "#f1f5f9",
         showline: true,
