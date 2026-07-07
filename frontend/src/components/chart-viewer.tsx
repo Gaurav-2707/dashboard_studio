@@ -234,7 +234,6 @@ export default function ChartViewer({
       if (!isResponseAnswer(label)) continue;
 
       const labelLower = label.toLowerCase().trim();
-      if (labelLower === "unspecified") continue;
       if (/(?:top\s*2\s*box|bottom\s*2\s*box|top\s*two\s*box|bottom\s*two\s*box|t2b|b2b|top\s*box|bottom\s*box)/i.test(label))
         continue;
 
