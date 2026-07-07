@@ -123,7 +123,7 @@ export interface ChartConfig {
 
 export const COLOR_PALETTES: Record<string, string[]> = {
   Default: ["#4C78A8", "#F58518", "#54A24B", "#E45756", "#72B7B2", "#B279A2"],
-  Maruti: ["#01458E", "#DA241C", "#1F1A17"],
+  Maruti: ["#01458E", "#DA241C", "#1F1A17", "#C7E74C", "#FF5722", "#E5E5E5", "#005A9C"],
   Blue: ["#1f77b4", "#6baed6", "#9ecae1", "#c6dbef", "#08306b"],
   Green: ["#2ca02c", "#74c476", "#a1d99b", "#c7e9c0", "#005a32"],
   Warm: ["#e45756", "#f58518", "#ffbf79", "#b30000", "#7f2704"],
