@@ -308,7 +308,7 @@ export default function ChartViewer({
       const filtered = displayData.filter((d) => d.topBreak === breakName);
       const answers = filtered.map((d) => d.answer);
       const values = filtered.map((d) => d.value);
-      const wrappedAnswers = answers.map((ans) => wrapText(ans, 20).join("<br>"));
+      const wrappedAnswers = answers.map((ans) => wrapText(ans, 30).join("<br>"));
 
       const baseTrace: Record<string, unknown> = {
         name: wrapText(breakName, 22).join("<br>"),
@@ -386,7 +386,7 @@ export default function ChartViewer({
   const maxAnswerLines = useMemo(() => {
     let maxLines = 1;
     for (const r of displayData) {
-      const lines = wrapText(r.answer, 20).length;
+      const lines = wrapText(r.answer, 30).length;
       if (lines > maxLines) maxLines = lines;
     }
     return maxLines;
