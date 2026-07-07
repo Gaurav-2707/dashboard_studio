@@ -375,9 +375,38 @@ export default function ChartViewer({
 
   const displayAnswersCount = useMemo(() => new Set(displayData.map((d) => d.answer)).size, [displayData]);
 
+  const titleLinesCount = useMemo(() => {
+    return wrapText(effectiveTitle, 70).length;
+  }, [effectiveTitle]);
+
+  const topMargin = useMemo(() => {
+    return Math.max(75, titleLinesCount * (chartFontSize + 8) + 25);
+  }, [titleLinesCount, chartFontSize]);
+
+  const maxAnswerLines = useMemo(() => {
+    let maxLines = 1;
+    for (const r of displayData) {
+      const lines = wrapText(r.answer, 20).length;
+      if (lines > maxLines) maxLines = lines;
+    }
+    return maxLines;
+  }, [displayData]);
+
+  const bottomMargin = useMemo(() => {
+    if (legendPosition === "Outside Bottom") {
+      return chartType === "Horizontal bar" ? 140 : 190;
+    }
+    if (chartType === "Horizontal bar") {
+      return 60;
+    }
+    return Math.max(125, maxAnswerLines * 18 + 75);
+  }, [chartType, legendPosition, maxAnswerLines]);
+
   const plotHeight = useMemo(() => {
-    return chartType === "Horizontal bar" ? Math.max(height, displayAnswersCount * 28 + 100) : height;
-  }, [chartType, height, displayAnswersCount]);
+    const baseHeight = chartType === "Horizontal bar" ? Math.max(height, displayAnswersCount * 28 + 100) : height;
+    const extraMarginPadding = (topMargin - 60) + (bottomMargin - 120);
+    return baseHeight + Math.max(0, extraMarginPadding);
+  }, [chartType, height, displayAnswersCount, topMargin, bottomMargin]);
 
   // Compute active columns with low base size (< 30)
   const lowBaseColumns = useMemo(() => {
@@ -444,10 +473,8 @@ export default function ChartViewer({
       margin: {
         l: chartType === "Horizontal bar" ? 200 : 100,
         r: 50,
-        t: 55,
-        b: legendPosition === "Outside Bottom"
-          ? (chartType === "Horizontal bar" ? 120 : 180)
-          : (chartType === "Horizontal bar" ? 60 : 120),
+        t: topMargin,
+        b: bottomMargin,
       },
       plot_bgcolor: "white",
       paper_bgcolor: "white",
@@ -461,11 +488,11 @@ export default function ChartViewer({
         text: `<b>${wrappedTitle}</b>`,
         font: { size: chartFontSize + 3, color: "#333333", family: '"Hanken Grotesk", "Inter", sans-serif' },
         xref: "paper" as const,
-        yref: "container" as const,
+        yref: "paper" as const,
         x: 0.5,
-        y: 0.98,
+        y: 1.05,
         xanchor: "center" as const,
-        yanchor: "top" as const,
+        yanchor: "bottom" as const,
       },
       xaxis: {
         type: chartType !== "Horizontal bar" ? ("category" as const) : undefined,
@@ -505,7 +532,7 @@ export default function ChartViewer({
         font: { size: chartFontSize - 2, family: '"Inter", sans-serif' },
       },
     }),
-    [width, plotHeight, wrappedTitle, showGridlines, labelRotation, axisLabel, chartType, chartFontSize, legendPosition, legendConfig]
+    [width, plotHeight, wrappedTitle, showGridlines, labelRotation, axisLabel, chartType, chartFontSize, legendPosition, legendConfig, topMargin, bottomMargin]
   );
 
   const uniqueAnswers = new Set(chartData.map((d) => d.answer));
