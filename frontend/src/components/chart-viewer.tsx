@@ -487,12 +487,12 @@ export default function ChartViewer({
       title: {
         text: `<b>${wrappedTitle}</b>`,
         font: { size: chartFontSize + 3, color: "#333333", family: '"Hanken Grotesk", "Inter", sans-serif' },
-        xref: "paper" as const,
-        yref: "paper" as const,
+        xref: "container" as const,
+        yref: "container" as const,
         x: 0.5,
-        y: 1.05,
+        y: 0.97,
         xanchor: "center" as const,
-        yanchor: "bottom" as const,
+        yanchor: "top" as const,
       },
       xaxis: {
         type: chartType !== "Horizontal bar" ? ("category" as const) : undefined,
