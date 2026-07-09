@@ -4,7 +4,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-def search_market_context(query: str) -> str:
+def search_market_context(query: str, topic: str = "general", time_range: str = None) -> str:
     """
     Search the web for recent market trends, competitor launches, and news
     using the Tavily Search API.
@@ -21,22 +21,25 @@ def search_market_context(query: str) -> str:
         logger.warning("TAVILY_API_KEY is not configured in environment variables. Skipping web search.")
         return ""
 
-    logger.info(f"Executing Tavily search query: '{query}'")
+    logger.info(f"Executing Tavily search query: '{query}' (Topic: {topic}, Time Range: {time_range})")
 
     headers = {"Content-Type": "application/json"}
     payload = {
         "api_key": api_key,
         "query": query,
-        "search_depth": "basic",
-        "max_results": 4
+        "search_depth": "advanced",
+        "topic": topic,
+        "max_results": 3
     }
+    if time_range:
+        payload["time_range"] = time_range
 
     try:
         response = requests.post(
             "https://api.tavily.com/search",
             json=payload,
             headers=headers,
-            timeout=5
+            timeout=15
         )
         if response.status_code != 200:
             logger.warning(f"Tavily API returned status code {response.status_code}: {response.text}")
