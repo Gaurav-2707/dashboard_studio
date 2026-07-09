@@ -401,11 +401,22 @@ export default function ChartViewer({
     return Math.max(125, maxAnswerLines * 18 + 75);
   }, [chartType, legendPosition, maxAnswerLines]);
 
+  const totalAnswerLinesCount = useMemo(() => {
+    const uniqueAnswers = new Set(displayData.map((d) => d.answer));
+    let count = 0;
+    for (const ans of uniqueAnswers) {
+      count += wrapText(ans, 30).length;
+    }
+    return count || 1;
+  }, [displayData]);
+
   const plotHeight = useMemo(() => {
-    const baseHeight = chartType === "Horizontal bar" ? Math.max(height, displayAnswersCount * 28 + 100) : height;
+    const baseHeight = chartType === "Horizontal bar"
+      ? Math.max(height, displayAnswersCount * 22 + totalAnswerLinesCount * 16 + 100)
+      : height;
     const extraMarginPadding = (topMargin - 60) + (bottomMargin - 120);
     return baseHeight + Math.max(0, extraMarginPadding);
-  }, [chartType, height, displayAnswersCount, topMargin, bottomMargin]);
+  }, [chartType, height, displayAnswersCount, totalAnswerLinesCount, topMargin, bottomMargin]);
 
   // Compute active columns with low base size (< 30)
   const lowBaseColumns = useMemo(() => {
@@ -478,6 +489,7 @@ export default function ChartViewer({
       plot_bgcolor: "white",
       paper_bgcolor: "white",
       barmode: "group" as const,
+      bargap: 0.25,
       font: {
         family: '"Hanken Grotesk", "Inter", "Helvetica Neue", Arial, sans-serif',
         color: "#475569",
