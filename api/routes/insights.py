@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 insights_bp = Blueprint("insights", __name__)
 
-def _generate_search_query(model, brand: str, industry: str, table_title: str, active_columns: list, table_markdown: str, admin_context: str = "") -> str:
+def _generate_search_query(model, brand: str, industry: str, table_title: str, active_columns: list, table_markdown: str, survey_context: str = "") -> str:
     """
     Use ChatOpenAI to generate a search-engine-optimized query based on the brand,
     industry, specific question/table title, active columns, and survey data.
@@ -19,21 +19,30 @@ def _generate_search_query(model, brand: str, industry: str, table_title: str, a
     cols_str = ", ".join(active_columns) if active_columns else "Total"
     instruction = (
         "You are a search query generator helper.\n"
-        "Generate a single tavily search query to find current market trends, news, competitor launches, "
-        "or industry changes in India that are directly relevant to this survey table and segment(s):\n"
+        "Your task is to generate a highly optimized search engine query to find relevant external context (news, competitor moves, industry trends) for a survey table.\n\n"
+        "Here is the survey metadata:\n"
         f"Table Title: '{table_title}'\n"
         f"Brand/Company: '{brand}'\n"
         f"Industry: '{industry}'\n"
-        f"Analyzed Segments/Active Columns: '{cols_str}'\n"
+        f"Analyzed Segments: '{cols_str}'\n"
     )
-    if admin_context:
-        instruction += f"Additional Admin-Provided Context: '{admin_context}'\n"
+    if survey_context:
+        instruction += f"Survey Context / Research Goal: '{survey_context}'\n"
     instruction += (
-        "\nRules:\n"
-        "- Do not directly enter the any of the survey data or active columns, understand first and then create a highly optimized search engine query.\n"
-        "- Output ONLY the final plain text search query. Do not include quotes, prefix text, or conversational filler.\n"
-        "- Keep the query under 15 words.\n"
-        "- Focus on Indian market trends or competitor moves relevant to the topic.\n"
+        "\nRules for generating the query:\n"
+        "1. KEYWORDS ONLY: Output only a clean list of search keywords. Never output a sentence, conversational phrase, or descriptive description. Do not include periods or punctuation.\n"
+        "2. CONCISE: Keep the query strictly between 4 and 7 words. Long queries perform poorly.\n"
+        "3. NO RUN-ON MASHUPS: Focus on the brand name, the primary topic/product, and the country (e.g. 'India'). Do not try to concatenate demographic details, segments, or survey metadata into a single run-on query.\n"
+        "4. ALIGNED WITH GOALS: Use the 'Survey Context / Research Goal' to guide which aspect to search for (e.g. if the context mentions 'competitor EVs', search for competitor EV launches, not general brand history).\n"
+        "5. NO SURVEY LABELS: Never include code names or survey-specific column labels (like 'C1', 'C6', etc.) in the query.\n"
+        "6. ONLY THE QUERY: Output ONLY the final plain text search query. Do not include quotes, markdown formatting, prefix text, or conversational filler.\n"
+        "\nGood Examples:\n"
+        "- 'Maruti Suzuki EV launches India'\n"
+        "- 'two wheeler to car transition India'\n"
+        "- 'automotive entry level car trends India'\n"
+        "\nBad Examples:\n"
+        "- 'Indian lower middle class 2 wheeler owners buying Maruti car market trends competitor analysis.'\n"
+        "- 'Find the latest news on Maruti Suzuki EV plans and what Tata is doing'\n"
     )
     try:
         messages = [HumanMessage(content=instruction)]
@@ -186,7 +195,10 @@ def generate_insights():
 
         # Generate search query dynamically and fetch context
         dynamic_query = _generate_search_query(model, primary_brand, industry, table_title, cols_to_use, table_markdown, admin_context)
-        market_context = search_market_context(dynamic_query)
+        
+        # Dual Tavily Search: Web/General + News/Articles (last 30 days)
+        general_context = search_market_context(dynamic_query, topic="general")
+        news_context = search_market_context(dynamic_query, topic="news", time_range="month")
 
         system_prompt = (
             "You are a Senior Strategic Market Research Consultant specializing in the {industry} sector ({primary_brand} landscape). "
@@ -219,10 +231,17 @@ def generate_insights():
         )
 
         logger.info(f"Tavily Search Query: '{dynamic_query}'")
-        logger.info(f"Tavily Search Results:\n{market_context}")
+        logger.info(f"Tavily General Web Results:\n{general_context}")
+        logger.info(f"Tavily Recent News Results:\n{news_context}")
 
         admin_context_str = f"Additional Context for this Survey (from Admin):\n{admin_context}\n\n" if admin_context else ""
-        context_str = f"Current Market Context (Web Search):\n{market_context}\n\n" if market_context else ""
+        
+        context_str = ""
+        if general_context:
+            context_str += f"Current Market Context (Web Search):\n{general_context}\n\n"
+        if news_context:
+            context_str += f"Recent News & Articles (Last 30 Days):\n{news_context}\n\n"
+
         messages = [
             SystemMessage(content=system_prompt_formatted),
             HumanMessage(content=f"{admin_context_str}{context_str}Here is the chart data:\n{table_markdown}")
