@@ -86,6 +86,65 @@ function wrapText(text: string, width: number): string[] {
   return lines;
 }
 
+function wrapAndHyphenate(text: string, width: number, maxLines: number): string {
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let currentLine = "";
+
+  for (let i = 0; i < words.length; i++) {
+    let word = words[i];
+
+    // If the word itself is longer than width, we must hyphenate/split it
+    if (word.length > width) {
+      // If we have some content in the current line, push it to lines first
+      if (currentLine) {
+        lines.push(currentLine);
+        currentLine = "";
+      }
+
+      // Split the long word into chunks of width - 1 with hyphens
+      while (word.length > width) {
+        const chunk = word.slice(0, width - 1) + "-";
+        lines.push(chunk);
+        word = word.slice(width - 1);
+      }
+      currentLine = word; // Remaining part of the word
+    } else {
+      // Check if adding this word exceeds the width
+      const testLine = currentLine ? currentLine + " " + word : word;
+      if (testLine.length > width) {
+        if (currentLine) {
+          lines.push(currentLine);
+        }
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
+  }
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  // Now apply maxLines truncation
+  if (lines.length > maxLines) {
+    const allowedLines = lines.slice(0, maxLines);
+    // Take the last allowed line, remove any trailing hyphen, and append "..."
+    let lastLine = allowedLines[maxLines - 1];
+    if (lastLine.endsWith("-")) {
+      lastLine = lastLine.slice(0, -1);
+    }
+    // Truncate lastLine if adding "..." would make it exceed the width
+    if (lastLine.length + 3 > width) {
+      lastLine = lastLine.slice(0, width - 3);
+    }
+    allowedLines[maxLines - 1] = lastLine + "...";
+    return allowedLines.join("<br>");
+  }
+
+  return lines.join("<br>");
+}
+
 // Intersection calculations removed as requested.
 
 // ============================================================================
@@ -307,7 +366,12 @@ export default function ChartViewer({
       const filtered = displayData.filter((d) => d.topBreak === breakName);
       const answers = filtered.map((d) => d.answer);
       const values = filtered.map((d) => d.value);
-      const wrappedAnswers = answers.map((ans) => wrapText(ans, 30).join("<br>"));
+      const wrappedAnswers = answers.map((ans) => {
+        if (chartType === "Pie") {
+          return wrapAndHyphenate(ans, 20, 3);
+        }
+        return wrapText(ans, 30).join("<br>");
+      });
 
       const baseTrace: Record<string, unknown> = {
         name: wrapText(breakName, 22).join("<br>"),
@@ -322,6 +386,7 @@ export default function ChartViewer({
           values,
           textinfo: "label+percent",
           textposition: "inside",
+          insidetextorientation: "horizontal" as const,
           marker: {
             colors: answers.map((_, i) => colors[i % colors.length]),
           },
