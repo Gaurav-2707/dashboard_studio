@@ -31,15 +31,14 @@ def _generate_search_query(model, brand: str, industry: str, table_title: str, a
     instruction += (
         "\nRules for generating the query:\n"
         "1. KEYWORDS ONLY: Output only a clean list of search keywords. Never output a sentence, conversational phrase, or descriptive description. Do not include periods or punctuation.\n"
-        "2. CONCISE: Keep the query strictly between 4 and 7 words. Long queries perform poorly.\n"
-        "3. NO RUN-ON MASHUPS: Focus on the brand name, the primary topic/product, and the country (e.g. 'India'). Do not try to concatenate demographic details, segments, or survey metadata into a single run-on query.\n"
+        "2. SPECIALIZED AND DETAILED: Create a highly specialized and detailed query to find narrow, targeted market details. Do not restrict the query length; prioritize specificity and search depth over conciseness.\n"
+        "3. INTEGRATE CONTEXT: Make sure to fully integrate details from the 'Survey Context / Research Goal', the question title, and the brand details into a comprehensive search expression.\n"
         "4. ALIGNED WITH GOALS: Use the 'Survey Context / Research Goal' to guide which aspect to search for (e.g. if the context mentions 'competitor EVs', search for competitor EV launches, not general brand history).\n"
         "5. NO SURVEY LABELS: Never include code names or survey-specific column labels (like 'C1', 'C6', etc.) in the query.\n"
         "6. ONLY THE QUERY: Output ONLY the final plain text search query. Do not include quotes, markdown formatting, prefix text, or conversational filler.\n"
         "\nGood Examples:\n"
-        "- 'Maruti Suzuki EV launches India'\n"
-        "- 'two wheeler to car transition India'\n"
-        "- 'automotive entry level car trends India'\n"
+        "- 'Maruti Suzuki EV launches competitor strategy Tata Nexon EV passenger vehicles market share India'\n"
+        "- 'two wheeler to passenger car transition consumer preference entry level vehicles India'\n"
         "\nBad Examples:\n"
         "- 'Indian lower middle class 2 wheeler owners buying Maruti car market trends competitor analysis.'\n"
         "- 'Find the latest news on Maruti Suzuki EV plans and what Tata is doing'\n"
@@ -184,7 +183,7 @@ def generate_insights():
             logger.warning("NVIDIA_API_KEY is not set in environment variables.")
 
         model = ChatOpenAI(
-            model="meta/llama-3.1-8b-instruct",
+            model=os.environ.get("LLM_MODEL", "meta/llama-3.1-70b-instruct"),
             openai_api_base="https://integrate.api.nvidia.com/v1",
             openai_api_key=api_key,
             temperature=0.2,
@@ -439,12 +438,33 @@ def chat_with_survey_data():
 
         api_key = os.environ.get("NVIDIA_API_KEY", "")
         model = ChatOpenAI(
-            model="meta/llama-3.1-8b-instruct",
+            model=os.environ.get("LLM_CHAT_MODEL", "nvidia/nemotron-3-ultra-550b-a55b"),
             openai_api_base="https://integrate.api.nvidia.com/v1",
             openai_api_key=api_key,
             temperature=0.3,
-            max_tokens=800
+            max_tokens=2048
         )
+
+        # Check if the user is asking a question that demands external market/competitor context
+        search_keywords = [
+            "news", "latest", "competitor", "market", "trend", "external", 
+            "update", "industry", "recent", "brand", "why", "reason", 
+            "driver", "currently", "launch", "pricing", "strategy", "happen"
+        ]
+        last_message = chat_messages[-1].get("content", "").lower() if chat_messages else ""
+        needs_search = any(kw in last_message for kw in search_keywords)
+        
+        external_context_str = ""
+        if needs_search:
+            try:
+                # Generate search query dynamically and fetch context
+                dynamic_query = _generate_search_query(model, company_name, industry, table_title, cols_to_use, table_markdown, admin_context)
+                general_context = search_market_context(dynamic_query, topic="general")
+                if general_context:
+                    external_context_str = f"\n\nCurrent Market Context (Web Search):\n{general_context}\n"
+                    logger.info(f"Chat assistant dynamically fetched external context for query: '{dynamic_query}'")
+            except Exception as se:
+                logger.error(f"Failed to fetch dynamic search context for chat: {se}")
 
         system_prompt = (
             "You are a Senior Strategic Market Research Consultant specializing in the {industry} sector ({primary_brand} landscape). "
@@ -473,6 +493,9 @@ def chat_with_survey_data():
             table_title=table_title,
             table_markdown=table_markdown
         )
+
+        if external_context_str:
+            system_prompt_formatted += external_context_str
 
         messages = [SystemMessage(content=system_prompt_formatted)]
         for msg in chat_messages:

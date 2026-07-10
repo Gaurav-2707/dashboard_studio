@@ -150,58 +150,170 @@ export default function ChartChatAssistant({
     }
   };
 
-  // Helper functions for safe, custom Markdown formatting (bold, lists, etc.)
+  // Helper functions for safe, custom Markdown formatting (bold, lists, headings, and tables)
+  const renderCodeOnly = (text: string) => {
+    const codeParts = text.split(/(`.*?`)/g);
+    return codeParts.map((subPart, j) => {
+      if (subPart.startsWith("`") && subPart.endsWith("`")) {
+        return (
+          <code key={j} className="bg-surface-container-highest px-1 py-0.5 rounded font-mono text-xs text-secondary-fixed">
+            {subPart.slice(1, -1)}
+          </code>
+        );
+      }
+      return subPart;
+    });
+  };
+
+  const renderItalicsAndCode = (text: string) => {
+    const italicParts = text.split(/(\*.*?\*)/g);
+    return italicParts.map((italicPart, i) => {
+      if (italicPart.startsWith("*") && italicPart.endsWith("*") && !italicPart.startsWith("**")) {
+        return (
+          <em key={i} className="italic text-primary-fixed-dim font-medium">
+            {renderCodeOnly(italicPart.slice(1, -1))}
+          </em>
+        );
+      }
+      return renderCodeOnly(italicPart);
+    });
+  };
+
   const renderTextWithBold = (text: string) => {
-    const parts = text.split(/(\*\*.*?\*\*)/g);
-    return parts.map((part, i) => {
-      if (part.startsWith("**") && part.endsWith("**")) {
+    const boldParts = text.split(/(\*\*.*?\*\*)/g);
+    return boldParts.map((boldPart, i) => {
+      if (boldPart.startsWith("**") && boldPart.endsWith("**")) {
         return (
           <strong key={i} className="font-bold text-primary">
-            {part.slice(2, -2)}
+            {renderItalicsAndCode(boldPart.slice(2, -2))}
           </strong>
         );
       }
-
-      // Inline code fallback (`code`)
-      const codeParts = part.split(/(`.*?`)/g);
-      return codeParts.map((subPart, j) => {
-        if (subPart.startsWith("`") && subPart.endsWith("`")) {
-          return (
-            <code key={j} className="bg-surface-container-highest px-1 py-0.5 rounded font-mono text-xs text-secondary-fixed">
-              {subPart.slice(1, -1)}
-            </code>
-          );
-        }
-        return subPart;
-      });
+      return renderItalicsAndCode(boldPart);
     });
+  };
+
+  const renderTableHelper = (rows: string[][], key: number) => {
+    if (rows.length === 0) return null;
+    const headers = rows[0];
+    const dataRows = rows.slice(1);
+
+    return (
+      <div key={key} className="overflow-x-auto my-3 rounded-lg border border-outline-variant/20 bg-surface-container-low/40 custom-scrollbar">
+        <table className="min-w-full divide-y divide-outline-variant/10 text-left font-sans text-xs">
+          <thead>
+            <tr className="bg-surface-container-high/60">
+              {headers.map((h, i) => (
+                <th key={i} className="px-2.5 py-2 font-bold text-primary-fixed-dim text-[11px] tracking-wider uppercase">
+                  {renderTextWithBold(h)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-outline-variant/5">
+            {dataRows.map((row, i) => (
+              <tr key={i} className="hover:bg-white/5 transition-colors">
+                {row.map((cell, j) => (
+                  <td key={j} className="px-2.5 py-2 text-on-surface/90 text-[11px] leading-relaxed">
+                    {renderTextWithBold(cell)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderNormalLine = (line: string, key: number) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      return <div key={key} className="h-1" />;
+    }
+
+    // Headings
+    if (trimmed.startsWith("### ")) {
+      return (
+        <h4 key={key} className="font-bold text-sm text-primary-fixed-dim my-2 mt-3 block">
+          {renderTextWithBold(trimmed.substring(4))}
+        </h4>
+      );
+    }
+    if (trimmed.startsWith("## ")) {
+      return (
+        <h3 key={key} className="font-bold text-base text-primary-fixed-dim my-2.5 mt-4 block">
+          {renderTextWithBold(trimmed.substring(3))}
+        </h3>
+      );
+    }
+    if (trimmed.startsWith("# ")) {
+      return (
+        <h2 key={key} className="font-bold text-lg text-primary-fixed-dim my-3 mt-4 block">
+          {renderTextWithBold(trimmed.substring(2))}
+        </h2>
+      );
+    }
+
+    // Lists
+    if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+      const bulletText = trimmed.substring(2);
+      return (
+        <li key={key} className="ml-4 list-disc text-[13px] text-on-surface/90 my-0.5 leading-relaxed">
+          {renderTextWithBold(bulletText)}
+        </li>
+      );
+    }
+
+    // Normal text
+    return (
+      <p key={key} className="text-[13px] text-on-surface/90 leading-relaxed my-1">
+        {renderTextWithBold(line)}
+      </p>
+    );
   };
 
   const formatMessageContent = (content: string) => {
     const lines = content.split("\n");
-    return lines.map((line, idx) => {
+    const parsedElements: React.ReactNode[] = [];
+    let currentTableRows: string[][] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
       const trimmed = line.trim();
-      if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-        const bulletText = trimmed.substring(2);
-        return (
-          <li key={idx} className="ml-4 list-disc text-[13px] text-on-surface/90 my-1 leading-relaxed">
-            {renderTextWithBold(bulletText)}
-          </li>
-        );
+
+      if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
+        // Table row
+        const cells = line
+          .split("|")
+          .map((c) => c.trim())
+          .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+
+        const isSeparator = cells.every((c) => /^[:-]+$/.test(c));
+        if (!isSeparator) {
+          currentTableRows.push(cells);
+        }
+      } else {
+        if (currentTableRows.length > 0) {
+          parsedElements.push(renderTableHelper(currentTableRows, parsedElements.length));
+          currentTableRows = [];
+        }
+        parsedElements.push(renderNormalLine(line, parsedElements.length));
       }
-      return (
-        <p key={idx} className="text-[13px] text-on-surface/90 leading-relaxed my-1 min-h-[1em]">
-          {renderTextWithBold(line)}
-        </p>
-      );
-    });
+    }
+
+    if (currentTableRows.length > 0) {
+      parsedElements.push(renderTableHelper(currentTableRows, parsedElements.length));
+    }
+
+    return parsedElements;
   };
 
   return (
     <div className="fixed bottom-8 right-8 z-50 flex flex-col items-end gap-4 pointer-events-none">
       {/* Chat Window Container */}
       <div
-        className={`w-[360px] h-[500px] glass-panel rounded-xl shadow-2xl flex flex-col overflow-hidden border border-primary/20 backdrop-blur-xl transition-all duration-300 ease-out origin-bottom-right pointer-events-auto ${isOpen
+        className={`w-[480px] h-[500px] glass-panel rounded-xl shadow-2xl flex flex-col overflow-hidden border border-primary/20 backdrop-blur-xl transition-all duration-300 ease-out origin-bottom-right pointer-events-auto ${isOpen
           ? "scale-100 opacity-100 translate-y-0"
           : "scale-95 opacity-0 translate-y-4 pointer-events-none"
           }`}
@@ -290,7 +402,7 @@ export default function ChartChatAssistant({
           <div className="relative flex items-end">
             <textarea
               ref={textareaRef}
-              className="w-full bg-surface-container-high border-outline-variant/30 rounded-lg py-2 pl-3 pr-10 text-[14px] text-on-surface focus:ring-primary focus:border-primary focus:outline-none transition-all placeholder:text-on-surface-variant/40 resize-none custom-scrollbar min-h-[38px] max-h-[120px]"
+              className="w-full bg-surface-container-high border-outline-variant/30 rounded-lg py-2.5 pl-3 pr-12 text-[14px] text-on-surface focus:ring-primary focus:border-primary focus:outline-none transition-all placeholder:text-on-surface-variant/40 resize-none custom-scrollbar min-h-[38px] max-h-[120px]"
               placeholder="Ask about your data..."
               rows={1}
               value={input}
@@ -306,9 +418,9 @@ export default function ChartChatAssistant({
             <button
               type="submit"
               disabled={loading || !input.trim()}
-              className="absolute right-2 bottom-2 text-primary hover:scale-110 active:scale-95 transition-transform disabled:opacity-30 disabled:scale-100 cursor-pointer"
+              className="absolute right-2 bottom-1.5 w-7 h-7 bg-primary text-background rounded-lg flex items-center justify-center shadow-md shadow-primary/10 hover:scale-105 active:scale-95 transition-all disabled:opacity-30 disabled:scale-100 cursor-pointer"
             >
-              <span className="material-symbols-outlined">send</span>
+              <span className="material-symbols-outlined !text-[16px] font-bold">send</span>
             </button>
           </div>
         </form>
