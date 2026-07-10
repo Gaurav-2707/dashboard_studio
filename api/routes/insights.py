@@ -485,7 +485,7 @@ def chat_with_survey_data():
             "5. Limitations: If the user asks for details that are not in this table and cannot be found in the provided context, politely inform them that the data is not present in this chart.\n"
             "6. Strict History Adherence: Respond directly to the user's latest query, utilizing the provided conversation history for context."
             "7. Reasoning: Give proper reasoning on why the trend occurs, dont just give the data the user can see in a text format. the chat is for reasoning on why the trend occurs or what could be the reasons for the trend"
-            "8. Length of response: try to wrap up the response in 800 words maximum."
+            "8. Length of response: Keep the response very short, concise, and focused. Wrap up the entire response in under 700 words (max 800 tokens) to ensure it is never truncated or cut off."
         )
 
         system_prompt_formatted = system_prompt.format(
