@@ -3,7 +3,7 @@ import os
 from flask import Blueprint, jsonify, request, g, current_app
 from auth.decorator import require_auth
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_core.output_parsers import JsonOutputParser
 from services.search_service import search_market_context
 
@@ -348,3 +348,154 @@ def save_survey_context(survey_id):
     except Exception as e:
         logger.exception("Error saving survey context")
         return jsonify({"error": "An internal error occurred."}), 500
+
+
+@insights_bp.route("/surveys/chat", methods=["POST"])
+@require_auth(allowed_roles=["super_admin", "admin"])
+def chat_with_survey_data():
+    user_id = g.user_id
+    company_id = g.company_id
+    role = g.role
+
+    data = request.get_json() or {}
+    survey_id = data.get("survey_id")
+    table_id = data.get("table_id")
+    active_columns = data.get("active_columns", [])
+    table_data = data.get("table_data", {})
+    table_title = data.get("table_title", "Untitled Table")
+    chat_messages = data.get("messages", [])
+
+    if not survey_id or not table_id:
+        return jsonify({"error": "survey_id and table_id are required"}), 400
+
+    logger.info(f"Chat request for user {user_id} (Role: {role}) on table {table_id}")
+
+    try:
+        from services.supabase_client import get_supabase_client
+        cfg = current_app.config["DASHIFY_CONFIG"]
+        supabase = get_supabase_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
+        
+        # Verify survey access
+        query = (
+            supabase.table("parsed_surveys").select("id, company_id")
+        ).eq("id", survey_id)
+        
+        if g.role != "admin" and g.role != "super_admin":
+            query = query.eq("company_id", g.company_id)
+            
+        result = query.limit(1).execute()
+        if not result.data:
+            return jsonify({"error": "survey not found or access denied"}), 404
+
+        target_company_id = result.data[0].get("company_id") or company_id
+
+        # Fetch company info
+        industry = "Indian consumer market"
+        company_name = "the client"
+        if target_company_id:
+            try:
+                company_res = supabase.table("companies").select("name, industry").eq("id", target_company_id).limit(1).execute()
+                if company_res.data:
+                    company_data = company_res.data[0]
+                    company_name = company_data.get("name", "the client")
+                    industry = company_data.get("industry") or "Indian consumer market"
+            except Exception as e:
+                logger.warning(f"Failed to fetch detailed company metadata: {e}")
+                try:
+                    company_res = supabase.table("companies").select("name").eq("id", target_company_id).limit(1).execute()
+                    if company_res.data:
+                        company_name = company_res.data[0].get("name", "the client")
+                except Exception as e2:
+                    logger.error(f"Failed to fetch fallback company name: {e2}")
+
+        # Fetch survey context if any
+        admin_context = ""
+        try:
+            context_res = supabase.table("survey_contexts").select("context").eq("survey_id", survey_id).limit(1).execute()
+            if context_res.data:
+                admin_context = context_res.data[0].get("context", "").strip()
+        except Exception as ce:
+            logger.warning(f"Failed to fetch survey context: {ce}")
+
+        # Construct markdown table representation
+        cols_to_use = active_columns if active_columns else ["Total"]
+        markdown_lines = []
+        header_row = f"| Response Label | " + " | ".join(cols_to_use) + " |"
+        divider_row = f"|---|" + "|---|".join([""] * len(cols_to_use)) + "|"
+        markdown_lines.extend([header_row, divider_row])
+
+        # Table data in format: Record<string, Record<string, number | string>>
+        for row_label, row_values in table_data.items():
+            row_cells = [row_label]
+            for col in cols_to_use:
+                val = row_values.get(col, "-")
+                if isinstance(val, (int, float)):
+                    row_cells.append(f"{val:.2f}%")
+                else:
+                    row_cells.append(str(val))
+            markdown_lines.append("| " + " | ".join(row_cells) + " |")
+            
+        table_markdown = "\n".join(markdown_lines)
+
+        api_key = os.environ.get("NVIDIA_API_KEY", "")
+        model = ChatOpenAI(
+            model="meta/llama-3.1-8b-instruct",
+            openai_api_base="https://integrate.api.nvidia.com/v1",
+            openai_api_key=api_key,
+            temperature=0.3,
+            max_tokens=800
+        )
+
+        system_prompt = (
+            "You are a Senior Strategic Market Research Consultant specializing in the {industry} sector ({primary_brand} landscape). "
+            "You are helping the user analyze survey chart data for '{company_name}' on the question '{table_title}'.\n\n"
+            "Here is the chart data:\n"
+            "{table_markdown}\n\n"
+        )
+        
+        if admin_context:
+            system_prompt += f"Additional Context for this Survey (from Admin):\n{admin_context}\n\n"
+
+        system_prompt += (
+            "Please answer the user's questions about this chart data under the following constraints:\n"
+            "1. Grounding: Answer questions strictly based on the provided table data. Do not make up demographic segments, rows, columns, or percentages that are not shown in the table.\n"
+            "2. Segmentation: Refer to demographic groups or segments (such as age, gender, regions) only if they are present in the table. Compare visible segments when relevant to the user's question.\n"
+            "3. Naming: Always refer to rows and columns exactly as they are named in the data.\n"
+            "4. Tone and formatting: Keep answers concise, highly professional, strategically insightful, and structured using clean conversational markdown (use bold text for key points and bullet points for lists).\n"
+            "5. Limitations: If the user asks for details that are not in this table and cannot be found in the provided context, politely inform them that the data is not present in this chart.\n"
+            "6. Strict History Adherence: Respond directly to the user's latest query, utilizing the provided conversation history for context."
+        )
+
+        system_prompt_formatted = system_prompt.format(
+            industry=industry,
+            primary_brand=company_name,
+            company_name=company_name,
+            table_title=table_title,
+            table_markdown=table_markdown
+        )
+
+        messages = [SystemMessage(content=system_prompt_formatted)]
+        for msg in chat_messages:
+            role = msg.get("role")
+            content = msg.get("content", "")
+            if role == "user":
+                messages.append(HumanMessage(content=content))
+            elif role == "assistant":
+                messages.append(AIMessage(content=content))
+
+        # We will stream the response back using Response and event-stream
+        from flask import Response
+        
+        def generate():
+            try:
+                for chunk in model.stream(messages):
+                    yield chunk.content
+            except Exception as stream_err:
+                logger.error(f"Error during streaming: {stream_err}")
+                yield f"\n[Error during generation: {stream_err}]"
+
+        return Response(generate(), mimetype="text/event-stream")
+
+    except Exception as e:
+        logger.exception("Error in survey chat endpoint")
+        return jsonify({"error": "Failed to initiate chat. Please try again."}), 500

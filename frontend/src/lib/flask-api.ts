@@ -290,6 +290,43 @@ export async function resetUserPassword(
   });
 }
 
+/**
+ * Initiate streaming chat session for a specific chart.
+ */
+export async function chatWithLLMStream(
+  token: string,
+  payload: {
+    survey_id: string;
+    table_id: string;
+    table_title: string;
+    active_columns: string[];
+    table_data: Record<string, Record<string, number | string>>;
+    messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  }
+): Promise<Response> {
+  const url = `${API_URL}/api/surveys/chat`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    let body: any;
+    try {
+      body = await res.json();
+    } catch {
+      body = { error: await res.text() || `HTTP error ${res.status}` };
+    }
+    throw new FlaskAPIError(res.status, body);
+  }
+
+  return res;
+}
+
 export { FlaskAPIError };
 
 
