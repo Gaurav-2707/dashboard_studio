@@ -146,7 +146,114 @@ function wrapAndHyphenate(text: string, width: number, maxLines: number): string
   return lines.join("<br>");
 }
 
-// Intersection calculations removed as requested.
+function computeIntersectionColumn(
+  tableData: Record<string, Record<string, number | string>>,
+  selectedCols: string[]
+): string {
+  if (selectedCols.length < 2) {
+    return selectedCols[0] || "Total";
+  }
+
+  const combinedName = selectedCols.join(" & ");
+
+  // 1. Estimate base sizes for Weighted Sample and Unweighted Sample
+  for (const baseKey of ["Weighted Sample", "Unweighted Sample"]) {
+    if (baseKey in tableData) {
+      const baseRow = tableData[baseKey];
+      const totalBase = toNumber(baseRow["Total"]);
+
+      if (totalBase === null || totalBase <= 0) {
+        const bases = selectedCols
+          .filter((col) => col in baseRow)
+          .map((col) => toNumber(baseRow[col]))
+          .filter((b): b is number => b !== null);
+        tableData[baseKey][combinedName] = bases.length > 0 ? Math.min(...bases) : 0.0;
+      } else {
+        const bases = selectedCols
+          .filter((col) => col in baseRow)
+          .map((col) => toNumber(baseRow[col]))
+          .filter((b): b is number => b !== null);
+
+        if (bases.length > 0) {
+          // Overflow-safe multiplication of ratios
+          let prod = bases[0];
+          for (let i = 1; i < bases.length; i++) {
+            prod *= bases[i] / totalBase;
+          }
+          tableData[baseKey][combinedName] = prod;
+        } else {
+          tableData[baseKey][combinedName] = 0.0;
+        }
+      }
+    }
+  }
+
+  // 2. Compute the cell values for responses
+  const responseLabels = Object.keys(tableData).filter((label) =>
+    isResponseAnswer(label)
+  );
+
+  // Check if the calculated weighted base is 0 (or less than 0.5)
+  const weightedBase = toNumber(
+    tableData["Weighted Sample"]?.[combinedName]
+  );
+  const isEmptyBase = weightedBase !== null && weightedBase < 0.5;
+
+  const rawVals: Record<string, number> = {};
+  let sumRaw = 0.0;
+
+  const sumInputs: Record<string, number> = {};
+  for (const col of selectedCols) {
+    sumInputs[col] = 0.0;
+  }
+
+  for (const label of responseLabels) {
+    const rowVals = tableData[label];
+    const totalVal = toNumber(rowVals["Total"]);
+
+    const colVals: number[] = [];
+    for (const col of selectedCols) {
+      const val = toNumber(rowVals[col]);
+      if (val !== null) {
+        colVals.push(val);
+        sumInputs[col] += val;
+      }
+    }
+
+    if (colVals.length === 0) continue;
+
+    let est: number;
+    if (totalVal === null || totalVal <= 0) {
+      est = colVals.reduce((a, b) => a + b, 0) / colVals.length;
+    } else {
+      // Overflow-safe ratio multiplication
+      est = colVals[0];
+      for (let i = 1; i < colVals.length; i++) {
+        est *= colVals[i] / totalVal;
+      }
+    }
+
+    rawVals[label] = est;
+    sumRaw += est;
+  }
+
+  // 3. Normalize percentages
+  const avgSumInputs =
+    selectedCols.length > 0
+      ? Object.values(sumInputs).reduce((a, b) => a + b, 0) / selectedCols.length
+      : 100.0;
+  const factor = sumRaw > 0 ? avgSumInputs / sumRaw : 1.0;
+
+  for (const label of responseLabels) {
+    if (isEmptyBase) {
+      tableData[label][combinedName] = 0.0;
+    } else if (label in rawVals) {
+      tableData[label][combinedName] = rawVals[label] * factor;
+    }
+  }
+
+  return combinedName;
+}
 
 // ============================================================================
 // Component
@@ -168,9 +275,8 @@ export default function ChartViewer({
   );
 
   const [selectedTableId, setSelectedTableId] = useState(tableIds[0] || "");
-  const [activeColumns, setActiveColumns] = useState<string[]>(["Total"]);
-  const [showTopBreaks, setShowTopBreaks] = useState(false);
-  const [topBreaksSearchQuery, setTopBreaksSearchQuery] = useState("");
+  const [groups, setGroups] = useState<string[][]>([["Total"]]);
+  const [inputValues, setInputValues] = useState<Record<number, string>>({});
   const plotRef = useRef<any>(null);
   const [chartType, setChartType] = useState<ChartType>("Bar");
   const [sortOrder, setSortOrder] = useState<SortOrder>("Highest to lowest");
@@ -226,30 +332,54 @@ export default function ChartViewer({
     [tableData]
   );
 
-  const filteredColumns = useMemo(() => {
-    return availableColumns.filter((col) =>
-      col.toLowerCase().includes(topBreaksSearchQuery.toLowerCase())
-    );
-  }, [availableColumns, topBreaksSearchQuery]);
-
-  // Sync selected columns when table changes to filter out non-existent columns
+  // Sync groups when table changes to filter out non-existent columns
   useEffect(() => {
     if (availableColumns.length > 0) {
-      const filtered = activeColumns.filter((col) => availableColumns.includes(col));
-      if (filtered.length === 0) {
+      const newGroups = groups
+        .map((group) => group.filter((col) => availableColumns.includes(col)))
+        .filter((group) => group.length > 0);
+      
+      if (newGroups.length === 0) {
         if (availableColumns.includes("Total")) {
-          setActiveColumns(["Total"]);
+          setGroups([["Total"]]);
         } else {
-          setActiveColumns([availableColumns[0]]);
+          setGroups([[availableColumns[0]]]);
         }
       } else {
-        setActiveColumns(filtered);
+        setGroups(newGroups);
       }
     }
   }, [availableColumns]);
 
-  // Map computedTableData directly to tableData (no intersection calculations)
-  const computedTableData = tableData;
+  // Compute active columns — intersection runs client-side, mutating a deep copy
+  const { activeColumns, computedTableData } = useMemo(() => {
+    // Deep copy table data so intersection writes don't mutate original surveyData
+    const dataCopy: Record<string, Record<string, number | string>> = {};
+    for (const [key, val] of Object.entries(tableData)) {
+      dataCopy[key] = { ...val };
+    }
+
+    const cols: string[] = [];
+    for (const group of groups) {
+      if (group.length >= 2) {
+        const combinedCol = computeIntersectionColumn(dataCopy, group);
+        cols.push(combinedCol);
+      } else if (group.length === 1) {
+        cols.push(group[0]);
+      }
+    }
+
+    return { activeColumns: cols, computedTableData: dataCopy };
+  }, [tableData, groups]);
+
+  const handleGroupChange = useCallback(
+    (groupIdx: number, cols: string[]) => {
+      const newGroups = [...groups];
+      newGroups[groupIdx] = cols;
+      setGroups(newGroups);
+    },
+    [groups]
+  );
 
   const fetchAIInsights = useCallback(async (colsToUse?: string[]) => {
     const cols = Array.isArray(colsToUse) ? colsToUse : activeColumns;
@@ -662,106 +792,87 @@ export default function ChartViewer({
 
 
 
-      {/* Top Breaks Accordion */}
-      <div className="pt-md border-t border-outline-variant/20">
-        <button
-          onClick={() => setShowTopBreaks(!showTopBreaks)}
-          className="w-full flex items-center justify-between py-2 text-on-surface font-bold text-label-md group cursor-pointer !shadow-none hover:text-primary transition-colors"
-        >
-          Top Breaks Selection
-          <span
-            className={`material-symbols-outlined transition-transform duration-200 ${showTopBreaks ? "rotate-180" : ""
-              }`}
-          >
-            expand_more
-          </span>
-        </button>
+      {/* Top Breaks Comparison */}
+      <div className="space-y-sm pt-2">
+        <p className="text-label-sm font-bold text-on-surface border-b border-outline-variant/10 pb-1">
+          Top Breaks Comparison (Groups)
+        </p>
 
-        {showTopBreaks && (
-          <div className="space-y-sm mt-2 pt-2 border-t border-outline-variant/10">
-            {/* Selected Pills */}
-            <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto p-1 rounded-lg custom-scrollbar">
-              {activeColumns.length === 0 ? (
-                <span className="text-xs text-on-surface-variant/40 italic">No top breaks selected</span>
-              ) : (
-                <>
-                  {activeColumns.map((col) => (
-                    <span key={col} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-primary/15 border border-primary/25 text-primary max-w-full break-words">
-                      {col}
-                      <button
-                        onClick={() => {
-                          setActiveColumns(activeColumns.filter((c) => c !== col));
-                        }}
-                        className="hover:text-red-400 text-[10px] font-bold cursor-pointer ml-1.5 text-primary shrink-0"
-                      >
-                        ✕
-                      </button>
-                    </span>
-                  ))}
+        <div className="space-y-xs max-h-[280px] overflow-y-auto custom-scrollbar">
+          {groups.map((group, idx) => (
+            <div
+              key={idx}
+              className="p-2 rounded-lg bg-white/5 border border-outline-variant/10 flex flex-col gap-1.5"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-label-sm text-secondary font-bold">
+                  Group {idx + 1}
+                </span>
+                {groups.length > 1 && (
                   <button
-                    onClick={() => setActiveColumns([])}
-                    className="text-[10px] text-red-400 hover:text-red-300 font-bold ml-auto cursor-pointer !shadow-none"
+                    onClick={() => {
+                      setGroups(groups.filter((_, i) => i !== idx));
+                    }}
+                    className="text-on-surface-variant hover:text-error text-label-sm cursor-pointer"
                   >
-                    Clear All
+                    ✕
                   </button>
-                </>
-              )}
-            </div>
-
-            {/* Search Input */}
-            <div className="relative">
-              <input
-                type="text"
-                className="w-full bg-surface-container-high border border-outline-variant/30 rounded-lg text-on-surface py-1.5 px-3 focus:ring-1 focus:ring-primary outline-none text-xs"
-                placeholder="Search top breaks..."
-                value={topBreaksSearchQuery}
-                onChange={(e) => setTopBreaksSearchQuery(e.target.value)}
-              />
-              {topBreaksSearchQuery && (
-                <button
-                  onClick={() => setTopBreaksSearchQuery("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-on-surface-variant/60 hover:text-on-surface cursor-pointer !shadow-none"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-
-            {/* List with Checkboxes */}
-            <div className="flex flex-col gap-1 max-h-[180px] overflow-y-auto p-1.5 border border-outline-variant/10 rounded-lg bg-surface-container-high/30 custom-scrollbar">
-              {filteredColumns.length === 0 ? (
-                <span className="text-xs text-on-surface-variant/40 italic p-2 text-center">No matching top breaks</span>
-              ) : (
-                filteredColumns.map((col) => {
-                  const isChecked = activeColumns.includes(col);
-                  return (
-                    <label
-                      key={col}
-                      className={`flex items-start gap-2 px-2 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-all hover:bg-white/10 ${isChecked
-                        ? "bg-primary/10 text-primary font-semibold"
-                        : "text-on-surface-variant"
-                        }`}
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5 mb-1.5">
+                {group.map((col) => (
+                  <span key={col} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 border border-primary/20 text-primary">
+                    {col.length > 20 ? col.slice(0, 18) + "..." : col}
+                    <button
+                      onClick={() => {
+                        const newCols = group.filter((c) => c !== col);
+                        handleGroupChange(idx, newCols);
+                      }}
+                      className="hover:text-red-400 text-[10px] font-bold cursor-pointer ml-1 text-primary"
                     >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => {
-                          if (isChecked) {
-                            setActiveColumns(activeColumns.filter((c) => c !== col));
-                          } else {
-                            setActiveColumns([...activeColumns, col]);
-                          }
-                        }}
-                        className="rounded bg-surface-container border-outline-variant text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer shrink-0 mt-0.5"
-                      />
-                      <span className="whitespace-normal break-words leading-relaxed" title={col}>{col}</span>
-                    </label>
-                  );
-                })
-              )}
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+
+              <input
+                list={`datalist-group-${idx}`}
+                className="w-full bg-surface-container-high border border-outline-variant/30 rounded-lg text-on-surface py-1.5 px-3 focus:ring-1 focus:ring-primary outline-none text-xs"
+                placeholder="+ Add column (type to search)..."
+                value={inputValues[idx] || ""}
+                onChange={(e) => {
+                  const col = e.target.value;
+                  setInputValues((prev) => ({ ...prev, [idx]: col }));
+
+                  const validColumns = availableColumns.filter((c) => !group.includes(c));
+                  if (validColumns.includes(col)) {
+                    const newCols = [...group, col];
+                    handleGroupChange(idx, newCols);
+                    setInputValues((prev) => ({ ...prev, [idx]: "" }));
+                  }
+                }}
+              />
+              <datalist id={`datalist-group-${idx}`}>
+                {availableColumns
+                  .filter((col) => !group.includes(col))
+                  .map((col) => (
+                    <option key={col} value={col} />
+                  ))}
+              </datalist>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
+
+        <button
+          onClick={() =>
+            setGroups([...groups, []])
+          }
+          className="w-full py-2 border border-dashed border-primary/45 rounded-lg text-primary text-label-md flex items-center justify-center gap-1 hover:bg-primary/10 transition-colors cursor-pointer !shadow-none"
+        >
+          <span className="material-symbols-outlined text-[16px]">add</span>
+          Add Top Break Group
+        </button>
       </div>
 
       {/* Chart Type Selector Grid */}
@@ -1016,17 +1127,17 @@ export default function ChartViewer({
                 </p>
               </div>
             </div>
-            {/* Top Breaks count */}
+            {/* Groups count */}
             <div className="glass-panel flex-1 min-w-[160px] p-md rounded-xl flex items-center gap-md">
               <div className="w-12 h-12 rounded-lg bg-secondary/10 flex items-center justify-center text-secondary">
-                <span className="material-symbols-outlined">filter_alt</span>
+                <span className="material-symbols-outlined">group</span>
               </div>
               <div>
                 <p className="text-label-sm text-on-surface-variant uppercase tracking-wider">
-                  Top Breaks
+                  Groups
                 </p>
                 <p className="text-headline-md font-bold text-on-surface">
-                  {activeColumns.length}
+                  {groups.length}
                 </p>
               </div>
             </div>
@@ -1043,6 +1154,7 @@ export default function ChartViewer({
               <table className="w-full text-left font-label-md">
                 <thead className="text-on-surface-variant border-b border-outline-variant/10">
                   <tr>
+                    <th className="px-md py-2 font-medium">Group</th>
                     <th className="px-md py-2 font-medium">Top Break</th>
                     <th className="px-md py-2 font-medium text-right">Base (n)</th>
                   </tr>
@@ -1052,6 +1164,9 @@ export default function ChartViewer({
                     const base = computedTableData["Weighted Sample"]?.[col]
                     return (
                       <tr key={idx} className="hover:bg-white/5 transition-colors">
+                        <td className="px-md py-2 text-secondary font-bold">
+                          Group {idx + 1}
+                        </td>
                         <td className="px-md py-2 break-words max-w-[200px]" title={col}>
                           {col}
                         </td>
