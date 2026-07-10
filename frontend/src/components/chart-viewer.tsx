@@ -400,6 +400,7 @@ export default function ChartViewer({
         table_id: selectedTableId,
         chart_type: chartType,
         active_columns: cols,
+        table_data: computedTableData,
         save_to_cache: true,
       });
       setInsightContent(data.insight);
