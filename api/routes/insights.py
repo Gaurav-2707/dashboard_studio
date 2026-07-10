@@ -183,7 +183,7 @@ def generate_insights():
             logger.warning("NVIDIA_API_KEY is not set in environment variables.")
 
         model = ChatOpenAI(
-            model=os.environ.get("LLM_MODEL", "nvidia/nemotron-3-ultra-550b-a55b"),
+            model=os.environ.get("LLM_MODEL", "meta/llama-3.1-8b-instruct"),
             openai_api_base="https://integrate.api.nvidia.com/v1",
             openai_api_key=api_key,
             temperature=0.2,
@@ -438,11 +438,11 @@ def chat_with_survey_data():
 
         api_key = os.environ.get("NVIDIA_API_KEY", "")
         model = ChatOpenAI(
-            model=os.environ.get("LLM_CHAT_MODEL", "nvidia/nemotron-3-ultra-550b-a55b"),
+            model=os.environ.get("LLM_CHAT_MODEL", "meta/llama-3.1-70b-instruct"),
             openai_api_base="https://integrate.api.nvidia.com/v1",
             openai_api_key=api_key,
             temperature=0.3,
-            max_tokens=800
+            max_tokens=2048
         )
 
         # Check if the user is asking a question that demands external market/competitor context
