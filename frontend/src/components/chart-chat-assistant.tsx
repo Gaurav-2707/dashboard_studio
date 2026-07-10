@@ -56,7 +56,7 @@ export default function ChartChatAssistant({
       setMessages([
         {
           role: "assistant",
-          content: `Hello! I'm your Dashify AI assistant. How can I help you analyze the survey data for the question **"${tableTitle}"** today?`,
+          content: `Hello! I'm your AI assistant. How can I help you analyze the survey data for the question **"${tableTitle}"** today?`,
         },
       ]);
     } else {
