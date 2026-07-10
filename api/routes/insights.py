@@ -183,7 +183,7 @@ def generate_insights():
             logger.warning("NVIDIA_API_KEY is not set in environment variables.")
 
         model = ChatOpenAI(
-            model=os.environ.get("LLM_MODEL", "meta/llama-3.1-70b-instruct"),
+            model="meta/llama-3.1-8b-instruct",
             openai_api_base="https://integrate.api.nvidia.com/v1",
             openai_api_key=api_key,
             temperature=0.2,
@@ -442,7 +442,7 @@ def chat_with_survey_data():
             openai_api_base="https://integrate.api.nvidia.com/v1",
             openai_api_key=api_key,
             temperature=0.3,
-            max_tokens=2048
+            max_tokens=800
         )
 
         # Check if the user is asking a question that demands external market/competitor context
@@ -478,12 +478,14 @@ def chat_with_survey_data():
 
         system_prompt += (
             "Please answer the user's questions about this chart data under the following constraints:\n"
-            "1. Grounding: Answer questions strictly based on the provided table data. Do not make up demographic segments, rows, columns, or percentages that are not shown in the table.\n"
+            "1. Grounding: Answer questions based on the provided table data. Do not make up demographic segments, rows, columns, or percentages that are not shown in the table.\n"
             "2. Segmentation: Refer to demographic groups or segments (such as age, gender, regions) only if they are present in the table. Compare visible segments when relevant to the user's question.\n"
             "3. Naming: Always refer to rows and columns exactly as they are named in the data.\n"
             "4. Tone and formatting: Keep answers concise, highly professional, strategically insightful, and structured using clean conversational markdown (use bold text for key points and bullet points for lists).\n"
             "5. Limitations: If the user asks for details that are not in this table and cannot be found in the provided context, politely inform them that the data is not present in this chart.\n"
             "6. Strict History Adherence: Respond directly to the user's latest query, utilizing the provided conversation history for context."
+            "7. Reasoning: Give proper reasoning on why the trend occurs, dont just give the data the user can see in a text format. the chat is for reasoning on why the trend occurs or what could be the reasons for the trend"
+            "8. Length of response: try to wrap up the response in 800 words maximum."
         )
 
         system_prompt_formatted = system_prompt.format(
