@@ -127,15 +127,25 @@ def generate_insights():
         except Exception as ce:
             logger.warning(f"Failed to query insights cache: {ce}")
             
-        from services.parser import get_parsed_survey_data
-        survey_json = get_parsed_survey_data(result.data[0], cfg)
+        # Check if the client provided the computed table data directly (supporting client-side intersections)
+        table_data = data.get("table_data")
+        table_title = "Untitled Table"
 
-        table_info = survey_json.get(str(table_id))
-        if not table_info:
-            return jsonify({"error": f"Table {table_id} not found in this survey."}), 404
-            
-        table_data = table_info.get("data", {})
-        table_title = table_info.get("title", "Untitled Table")
+        if table_data:
+            from services.parser import get_parsed_survey_data
+            survey_json = get_parsed_survey_data(result.data[0], cfg)
+            table_info = survey_json.get(str(table_id)) or {}
+            table_title = table_info.get("title", "Untitled Table")
+        else:
+            from services.parser import get_parsed_survey_data
+            survey_json = get_parsed_survey_data(result.data[0], cfg)
+
+            table_info = survey_json.get(str(table_id))
+            if not table_info:
+                return jsonify({"error": f"Table {table_id} not found in this survey."}), 404
+                
+            table_data = table_info.get("data", {})
+            table_title = table_info.get("title", "Untitled Table")
 
         cols_to_use = active_columns if active_columns else ["Total"]
         markdown_lines = []
@@ -486,7 +496,7 @@ def chat_with_survey_data():
             "5. Explanations: Do not say 'the data is not present in this chart' or 'there is not enough evidence' when the user asks for explanations, reasons, or market context. Instead, synthesize logical explanations based on the brand, industry, and the search context provided.\n"
             "6. Strict History Adherence: Respond directly to the user's latest query, utilizing the provided conversation history for context."
             "7. Reasoning: Give proper reasoning on why the trend occurs, dont just give the data the user can see in a text format. the chat is for reasoning on why the trend occurs or what could be the reasons for the trend"
-            "8. Length of response: Keep the response very short, concise, and focused. Wrap up the entire response in under 200 words (max 300 tokens) to ensure it fits inside the token limit and is never cut off."
+            "8. Length of response: Keep the response extremely short, concise, and direct. Wrap up the entire response in under 120 words to ensure it fits within the token limit and is never cut off."
         )
 
         system_prompt_formatted = system_prompt.format(
