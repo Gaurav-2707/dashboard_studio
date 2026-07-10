@@ -494,7 +494,11 @@ def chat_with_survey_data():
                 logger.error(f"Error during streaming: {stream_err}")
                 yield f"\n[Error during generation: {stream_err}]"
 
-        return Response(generate(), mimetype="text/event-stream")
+        resp = Response(generate(), mimetype="text/event-stream")
+        resp.headers["Cache-Control"] = "no-cache"
+        resp.headers["X-Accel-Buffering"] = "no"
+        resp.headers["Connection"] = "keep-alive"
+        return resp
 
     except Exception as e:
         logger.exception("Error in survey chat endpoint")
