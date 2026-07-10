@@ -183,11 +183,11 @@ def generate_insights():
             logger.warning("NVIDIA_API_KEY is not set in environment variables.")
 
         model = ChatOpenAI(
-            model="meta/llama-3.1-8b-instruct",
+            model=os.environ.get("LLM_MODEL", "nvidia/nemotron-3-ultra-550b-a55b"),
             openai_api_base="https://integrate.api.nvidia.com/v1",
             openai_api_key=api_key,
             temperature=0.2,
-            max_tokens=600
+            max_tokens=1500
         )
 
         primary_brand = company_name

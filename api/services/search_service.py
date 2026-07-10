@@ -16,17 +16,21 @@ def search_market_context(query: str, topic: str = "general", time_range: str = 
     if not query or not query.strip():
         return ""
 
+    query_str = query.strip()
+    if len(query_str) > 350:
+        query_str = query_str[:350].rsplit(' ', 1)[0]
+
     api_key = os.environ.get("TAVILY_API_KEY", "").strip()
     if not api_key:
         logger.warning("TAVILY_API_KEY is not configured in environment variables. Skipping web search.")
         return ""
 
-    logger.info(f"Executing Tavily search query: '{query}' (Topic: {topic}, Time Range: {time_range})")
+    logger.info(f"Executing Tavily search query: '{query_str}' (Topic: {topic}, Time Range: {time_range})")
 
     headers = {"Content-Type": "application/json"}
     payload = {
         "api_key": api_key,
-        "query": query,
+        "query": query_str,
         "search_depth": "advanced",
         "topic": topic,
         "max_results": 3
