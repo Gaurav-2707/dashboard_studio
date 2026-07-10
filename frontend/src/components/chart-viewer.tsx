@@ -16,6 +16,7 @@ import type {
 import { COLOR_PALETTES, CHART_SIZES, NON_RESPONSE_ROWS } from "@/lib/types";
 import { getAIInsights } from "@/lib/flask-api";
 import { createClient } from "@/lib/supabase/client";
+import ChartChatAssistant from "@/components/chart-chat-assistant";
 
 // Dynamic import for Plotly to avoid SSR issues
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false }) as any;
@@ -1287,6 +1288,18 @@ export default function ChartViewer({
         <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] bg-primary/5 blur-[120px] rounded-full"></div>
         <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-secondary/5 blur-[120px] rounded-full"></div>
       </div>
+
+      {/* Floating Chatbot Assistant overlay */}
+      {(role === "super_admin" || role === "admin") && (
+        <ChartChatAssistant
+          surveyId={surveyId}
+          tableId={selectedTableId}
+          tableTitle={selectedTable?.title || `Table ${selectedTableId}`}
+          activeColumns={activeColumns}
+          tableData={computedTableData}
+          accessToken={accessToken}
+        />
+      )}
 
       {mounted && typeof document !== "undefined" && document.getElementById("sidebar-settings-portal") &&
         createPortal(settingsPanel, document.getElementById("sidebar-settings-portal")!)}
