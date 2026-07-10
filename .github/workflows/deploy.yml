@@ -3,7 +3,7 @@ name: Deploy Backend to EC2
 on:
   push:
     branches:
-      - main  # Automatically runs when you push to the main branch
+      - testing  # Automatically runs when you push to the main branch
 
 jobs:
   deploy:
@@ -23,6 +23,10 @@ jobs:
           script: |
             # Navigate to the repository on the EC2 server
             cd /home/ubuntu/dashboard_studio
+            
+            # Reset any untracked or locally compiled pycache files
+            git reset --hard
+            git clean -fd
             
             # Pull the latest changes from the branch
             git pull origin testing

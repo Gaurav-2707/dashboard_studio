@@ -31,9 +31,9 @@ def search_market_context(query: str, topic: str = "general", time_range: str = 
     payload = {
         "api_key": api_key,
         "query": query_str,
-        "search_depth": "advanced",
+        "search_depth": "basic",
         "topic": topic,
-        "max_results": 3
+        "max_results": 2
     }
     if time_range:
         payload["time_range"] = time_range
