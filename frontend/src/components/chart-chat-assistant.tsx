@@ -32,6 +32,16 @@ export default function ChartChatAssistant({
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatHistoryRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize textarea height as text wraps
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+    }
+  }, [input]);
 
   // Auto-scroll to the bottom of the chat history
   useEffect(() => {
@@ -66,8 +76,8 @@ export default function ChartChatAssistant({
     ]);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.SyntheticEvent) => {
+    e?.preventDefault();
     if (!input.trim() || loading) return;
 
     const userQuery = input.trim();
@@ -207,7 +217,7 @@ export default function ChartChatAssistant({
             {messages.length > 1 && (
               <button
                 title="Clear Chat"
-                className="material-symbols-outlined text-on-surface-variant hover:text-error transition-colors text-lg cursor-pointer"
+                className="material-symbols-outlined text-on-surface-variant hover:text-error transition-colors text-lg cursor-pointer !shadow-none"
                 onClick={handleClearChat}
                 disabled={loading}
               >
@@ -277,19 +287,26 @@ export default function ChartChatAssistant({
           onSubmit={handleSubmit}
           className="p-4 border-t border-outline-variant/20 bg-surface-container-low/50"
         >
-          <div className="relative flex items-center">
-            <input
-              className="w-full bg-surface-container-high border-outline-variant/30 rounded-lg py-2 pl-3 pr-10 text-[14px] text-on-surface focus:ring-primary focus:border-primary focus:outline-none transition-all placeholder:text-on-surface-variant/40"
+          <div className="relative flex items-end">
+            <textarea
+              ref={textareaRef}
+              className="w-full bg-surface-container-high border-outline-variant/30 rounded-lg py-2 pl-3 pr-10 text-[14px] text-on-surface focus:ring-primary focus:border-primary focus:outline-none transition-all placeholder:text-on-surface-variant/40 resize-none custom-scrollbar min-h-[38px] max-h-[120px]"
               placeholder="Ask about your data..."
-              type="text"
+              rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }
+              }}
               disabled={loading}
             />
             <button
               type="submit"
               disabled={loading || !input.trim()}
-              className="absolute right-2 text-primary hover:scale-110 active:scale-95 transition-transform disabled:opacity-30 disabled:scale-100 cursor-pointer"
+              className="absolute right-2 bottom-2 text-primary hover:scale-110 active:scale-95 transition-transform disabled:opacity-30 disabled:scale-100 cursor-pointer"
             >
               <span className="material-symbols-outlined">send</span>
             </button>
