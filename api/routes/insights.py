@@ -32,10 +32,11 @@ def _generate_search_query(model, brand: str, industry: str, table_title: str, a
         "\nRules for generating the query:\n"
         "1. KEYWORDS ONLY: Output only a clean list of search keywords. Never output a sentence, conversational phrase, or descriptive description. Do not include periods or punctuation.\n"
         "2. SPECIALIZED AND DETAILED: Create a highly specialized and detailed query to find narrow, targeted market details. Do not restrict the query length; prioritize specificity and search depth over conciseness.\n"
-        "3. INTEGRATE CONTEXT: Make sure to fully integrate details from the 'Survey Context / Research Goal', the question title, and the brand details into a comprehensive search expression.\n"
-        "4. ALIGNED WITH GOALS: Use the 'Survey Context / Research Goal' to guide which aspect to search for (e.g. if the context mentions 'competitor EVs', search for competitor EV launches, not general brand history).\n"
-        "5. NO SURVEY LABELS: Never include code names or survey-specific column labels (like 'C1', 'C6', etc.) in the query.\n"
-        "6. ONLY THE QUERY: Output ONLY the final plain text search query. Do not include quotes, markdown formatting, prefix text, or conversational filler.\n"
+        "3. WHY-FOCUSED: Ensure the query specifically targets the *reasons* and *drivers* behind consumer behavior, preferences, or score rankings (e.g. search for 'reasons why consumers prefer Maruti for mileage' or 'drivers of passenger car transition India' to help explain the 'why' behind the survey trends).\n"
+        "4. INTEGRATE CONTEXT: Make sure to fully integrate details from the 'Survey Context / Research Goal', the question title, and the brand details into a comprehensive search expression.\n"
+        "5. ALIGNED WITH GOALS: Use the 'Survey Context / Research Goal' to guide which aspect to search for (e.g. if the context mentions 'competitor EVs', search for competitor EV launches, not general brand history).\n"
+        "6. NO SURVEY LABELS: Never include code names or survey-specific column labels (like 'C1', 'C6', etc.) in the query.\n"
+        "7. ONLY THE QUERY: Output ONLY the final plain text search query. Do not include quotes, markdown formatting, prefix text, or conversational filler.\n"
         "\nGood Examples:\n"
         "- 'Maruti Suzuki EV launches competitor strategy Tata Nexon EV passenger vehicles market share India'\n"
         "- 'two wheeler to passenger car transition consumer preference entry level vehicles India'\n"
@@ -195,9 +196,9 @@ def generate_insights():
         # Generate search query dynamically and fetch context
         dynamic_query = _generate_search_query(model, primary_brand, industry, table_title, cols_to_use, table_markdown, admin_context)
         
-        # Dual Tavily Search: Web/General + News/Articles (last 30 days)
+        # Consolidated search to a single General Search query in insights route to improve efficiency and avoid timeouts
         general_context = search_market_context(dynamic_query, topic="general")
-        news_context = search_market_context(dynamic_query, topic="news", time_range="month")
+        news_context = ""
 
         system_prompt = (
             "You are a Senior Strategic Market Research Consultant specializing in the {industry} sector ({primary_brand} landscape). "
@@ -478,14 +479,14 @@ def chat_with_survey_data():
 
         system_prompt += (
             "Please answer the user's questions about this chart data under the following constraints:\n"
-            "1. Grounding: Answer questions based on the provided table data. Do not make up demographic segments, rows, columns, or percentages that are not shown in the table.\n"
+            "1. Grounding: Answer questions based on the provided table data, but complement this with your own strategic reasoning, market knowledge, and search context. If the user asks for explanations or drivers behind a choice or score, provide logical market reasons rather than saying 'insufficient evidence' or 'no data in this chart'.\n"
             "2. Segmentation: Refer to demographic groups or segments (such as age, gender, regions) only if they are present in the table. Compare visible segments when relevant to the user's question.\n"
             "3. Naming: Always refer to rows and columns exactly as they are named in the data.\n"
             "4. Tone and formatting: Keep answers concise, highly professional, strategically insightful, and structured using clean conversational markdown (use bold text for key points and bullet points for lists).\n"
-            "5. Limitations: If the user asks for details that are not in this table and cannot be found in the provided context, politely inform them that the data is not present in this chart.\n"
+            "5. Explanations: Do not say 'the data is not present in this chart' or 'there is not enough evidence' when the user asks for explanations, reasons, or market context. Instead, synthesize logical explanations based on the brand, industry, and the search context provided.\n"
             "6. Strict History Adherence: Respond directly to the user's latest query, utilizing the provided conversation history for context."
             "7. Reasoning: Give proper reasoning on why the trend occurs, dont just give the data the user can see in a text format. the chat is for reasoning on why the trend occurs or what could be the reasons for the trend"
-            "8. Length of response: Keep the response very short, concise, and focused. Wrap up the entire response in under 700 words (max 800 tokens) to ensure it is never truncated or cut off."
+            "8. Length of response: Keep the response very short, concise, and focused. Wrap up the entire response in under 200 words (max 300 tokens) to ensure it fits inside the token limit and is never cut off."
         )
 
         system_prompt_formatted = system_prompt.format(
