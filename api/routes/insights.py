@@ -374,6 +374,7 @@ def chat_with_survey_data():
     table_data = data.get("table_data", {})
     table_title = data.get("table_title", "Untitled Table")
     chat_messages = data.get("messages", [])
+    reference_tables = data.get("reference_tables", [])
 
     if not survey_id or not table_id:
         return jsonify({"error": "survey_id and table_id are required"}), 400
@@ -385,9 +386,9 @@ def chat_with_survey_data():
         cfg = current_app.config["DASHIFY_CONFIG"]
         supabase = get_supabase_client(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY)
         
-        # Verify survey access
+        # Verify survey access and fetch survey data
         query = (
-            supabase.table("parsed_surveys").select("id, company_id")
+            supabase.table("parsed_surveys").select("id, company_id, survey_data")
         ).eq("id", survey_id)
         
         if g.role != "admin" and g.role != "super_admin":
@@ -396,6 +397,16 @@ def chat_with_survey_data():
         result = query.limit(1).execute()
         if not result.data:
             return jsonify({"error": "survey not found or access denied"}), 404
+
+        from services.parser import get_parsed_survey_data
+        parsed_survey_data = get_parsed_survey_data(result.data[0], cfg)
+        other_tables_info = []
+        for tid, tinfo in parsed_survey_data.items():
+            if str(tid) != str(table_id):
+                other_tables_info.append({
+                    "id": tid,
+                    "title": tinfo.get("title") or f"Table {tid}"
+                })
 
         target_company_id = result.data[0].get("company_id") or company_id
 
@@ -487,6 +498,66 @@ def chat_with_survey_data():
         if admin_context:
             system_prompt += f"Additional Context for this Survey (from Admin):\n{admin_context}\n\n"
 
+        # Inject cross-reference tables selected by the user (max 3, top 20 rows each)
+        if reference_tables and isinstance(reference_tables, list):
+            ref_sections = []
+            for ref in reference_tables[:3]:  # Cap at 3 tables to stay within token limits
+                ref_title = ref.get("table_title", "Untitled")
+                ref_data = ref.get("table_data", {})
+                if not ref_data:
+                    continue
+                # Build a compact markdown table from the reference data
+                # Get all column keys from the first row
+                all_cols = set()
+                for row_vals in ref_data.values():
+                    if isinstance(row_vals, dict):
+                        all_cols.update(row_vals.keys())
+                all_cols_list = sorted(all_cols)
+                if not all_cols_list:
+                    continue
+                ref_header = "| Response Label | " + " | ".join(all_cols_list) + " |"
+                ref_divider = "|---|" + "|".join(["---"] * len(all_cols_list)) + "|"
+                ref_rows = [ref_header, ref_divider]
+                row_count = 0
+                for row_label, row_vals in ref_data.items():
+                    if row_count >= 20:  # Truncate to top 20 rows per table
+                        ref_rows.append("| ... (truncated) | " + " | ".join(["..."] * len(all_cols_list)) + " |")
+                        break
+                    cells = [row_label]
+                    for c in all_cols_list:
+                        v = row_vals.get(c, "-") if isinstance(row_vals, dict) else "-"
+                        if isinstance(v, (int, float)):
+                            cells.append(f"{v:.2f}%")
+                        else:
+                            cells.append(str(v))
+                    ref_rows.append("| " + " | ".join(cells) + " |")
+                    row_count += 1
+                ref_md = "\n".join(ref_rows)
+                ref_sections.append(f"### {ref_title}\n{ref_md}")
+            
+            if ref_sections:
+                system_prompt += (
+                    "\n\nCross-Reference Tables (selected by the analyst for correlation analysis):\n"
+                    "Use the data in these tables to cross-reference trends, explain reasons, and draw correlations "
+                    "with the primary chart data above.\n\n"
+                    + "\n\n".join(ref_sections) + "\n\n"
+                )
+                logger.info(f"Injected {len(ref_sections)} cross-reference tables into chat prompt.")
+
+        # If other tables exist in the survey, inject them and add instructions for follow-up detection & suggesting relevant tables.
+        other_tables_section = ""
+        if other_tables_info:
+            other_tables_section = (
+                "\n\nAvailable Other Tables in the Survey (for cross-referencing):\n"
+                + "\n".join([f"- Table {t['id']}: {t['title']}" for t in other_tables_info]) + "\n\n"
+                "Determine if the user's latest query is a follow-up or a new/different question:\n"
+                "1. If the user's latest query is a follow-up or a continuation of the analysis on the current table or previously discussed context, answer directly and DO NOT output any suggestions tag.\n"
+                "2. If it is a completely different/new question (shifting topic or asking about aspects not covered in the current table), you must select the top 10 most relevant tables from the list of other tables above. At the very end of your response, output a `<suggestions>ID1, ID2, ...</suggestions>` tag containing the comma-separated IDs of the top 10 tables, and politely ask the user to pick between 1 and 3 of these tables to support the analysis (e.g. 'Please select 1 to 3 tables from the suggestions below to support this analysis')."
+            )
+        
+        if other_tables_section:
+            system_prompt += other_tables_section
+
         system_prompt += (
             "Please answer the user's questions about this chart data under the following constraints:\n"
             "1. Grounding: Answer questions based on the provided table data, but complement this with your own strategic reasoning, market knowledge, and search context. If the user asks for explanations or drivers behind a choice or score, provide logical market reasons rather than saying 'insufficient evidence' or 'no data in this chart'.\n"
@@ -494,9 +565,9 @@ def chat_with_survey_data():
             "3. Naming: Always refer to rows and columns exactly as they are named in the data.\n"
             "4. Tone and formatting: Keep answers concise, highly professional, strategically insightful, and structured using clean conversational markdown (use bold text for key points and bullet points for lists).\n"
             "5. Explanations: Do not say 'the data is not present in this chart' or 'there is not enough evidence' when the user asks for explanations, reasons, or market context. Instead, synthesize logical explanations based on the brand, industry, and the search context provided.\n"
-            "6. Strict History Adherence: Respond directly to the user's latest query, utilizing the provided conversation history for context."
-            "7. Reasoning: Give proper reasoning on why the trend occurs, dont just give the data the user can see in a text format. the chat is for reasoning on why the trend occurs or what could be the reasons for the trend"
-            "8. Length of response: Keep the response extremely short, concise, and direct. Wrap up the entire response in under 120 words to ensure it fits within the token limit and is never cut off."
+            "6. Strict History Adherence: Respond directly to the user's latest query, utilizing the provided conversation history for context.\n"
+            "7. Reasoning: Give proper reasoning on why the trend occurs, dont just give the data the user can see in a text format. the chat is for reasoning on why the trend occurs or what could be the reasons for the trend\n"
+            "8. Length of response: Keep the response extremely short, concise, and direct. Wrap up the entire response in under 120 words to ensure it fits within the token limit and is never cut off. Note: the `<suggestions>...</suggestions>` tag does not count towards the 120-word limit."
         )
 
         system_prompt_formatted = system_prompt.format(

@@ -1,7 +1,59 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { chatWithLLMStream } from "@/lib/flask-api";
+
+function getRelevanceScore(titleA: string, titleB: string): number {
+  const stopWords = new Set([
+    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "with", "of", "by", 
+    "is", "are", "was", "were", "about", "what", "how", "why", "who", "where", "which"
+  ]);
+  const cleanTokens = (text: string) => {
+    return text
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, "")
+      .split(/[\s_]+/)
+      .filter(w => w && w.length > 1 && !stopWords.has(w));
+  };
+
+  const tokensA = cleanTokens(titleA);
+  const tokensB = cleanTokens(titleB);
+
+  if (tokensA.length === 0 || tokensB.length === 0) return 0;
+
+  const setA = new Set(tokensA);
+  let overlap = 0;
+  for (const token of tokensB) {
+    if (setA.has(token)) {
+      overlap++;
+    }
+  }
+
+  return overlap / (setA.size + new Set(tokensB).size - overlap);
+}
+
+function getTopSuggestions(
+  activeTitle: string,
+  allOtherTables: Array<{ id: string; title: string }>
+): Array<{ id: string; title: string }> {
+  const scored = allOtherTables.map((t) => ({
+    table: t,
+    score: getRelevanceScore(activeTitle, t.title),
+  }));
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) {
+      return b.score - a.score;
+    }
+    const aNum = parseInt(a.table.id, 10);
+    const bNum = parseInt(b.table.id, 10);
+    if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+    return a.table.id.localeCompare(b.table.id);
+  });
+
+  return scored.slice(0, 10).map((s) => s.table);
+}
+
 
 interface ChartChatAssistantProps {
   surveyId: string;
@@ -10,6 +62,7 @@ interface ChartChatAssistantProps {
   activeColumns: string[];
   tableData: Record<string, Record<string, number | string>>;
   accessToken: string;
+  surveyData?: Record<string, { title?: string; data?: Record<string, Record<string, number | string>> }>;
 }
 
 interface Message {
@@ -24,15 +77,66 @@ export default function ChartChatAssistant({
   activeColumns,
   tableData,
   accessToken,
+  surveyData,
 }: ChartChatAssistantProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Reference table selection state
+  const [showRefSelector, setShowRefSelector] = useState(false);
+  const [selectedRefTableIds, setSelectedRefTableIds] = useState<Set<string>>(new Set());
+  const [refSearch, setRefSearch] = useState("");
+
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatHistoryRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const refSelectorRef = useRef<HTMLDivElement>(null);
+
+  // Build list of other tables in the survey (excluding the active table)
+  const otherTables = useMemo(() => {
+    if (!surveyData) return [];
+    return Object.entries(surveyData)
+      .filter(([id]) => id !== tableId)
+      .map(([id, info]) => ({
+        id,
+        title: info.title || `Table ${id}`,
+      }))
+      .sort((a, b) => {
+        const aNum = parseInt(a.id, 10);
+        const bNum = parseInt(b.id, 10);
+        if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+        return a.id.localeCompare(b.id);
+      });
+  }, [surveyData, tableId]);
+
+  // Get top 10 initial table suggestions based on active table title
+  const initialSuggestions = useMemo(() => {
+    return getTopSuggestions(tableTitle, otherTables);
+  }, [tableTitle, otherTables]);
+
+  // Filtered list based on search
+  const filteredOtherTables = useMemo(() => {
+    if (!refSearch.trim()) return otherTables;
+    const q = refSearch.toLowerCase();
+    return otherTables.filter(
+      (t) => t.title.toLowerCase().includes(q) || t.id.includes(q)
+    );
+  }, [otherTables, refSearch]);
+
+  // Close ref selector when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (refSelectorRef.current && !refSelectorRef.current.contains(e.target as Node)) {
+        setShowRefSelector(false);
+      }
+    };
+    if (showRefSelector) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showRefSelector]);
 
   // Auto-resize textarea height as text wraps
   useEffect(() => {
@@ -50,30 +154,65 @@ export default function ChartChatAssistant({
     }
   }, [messages, loading]);
 
+  const suggestionsKey = useMemo(() => {
+    return initialSuggestions.map((t) => t.id).join(",");
+  }, [initialSuggestions]);
+
   // Reset chat history when selecting a new chart/table
   useEffect(() => {
     if (tableId) {
+      const hasSuggestions = initialSuggestions.length > 0;
+      const suggestionsTag = hasSuggestions
+        ? `\n\n<suggestions>${initialSuggestions.map(t => t.id).join(", ")}</suggestions>`
+        : "";
+      const content = hasSuggestions
+        ? `Hello! I'm your AI assistant. To help support my answers with cross-referenced data, I've analyzed the survey and found the top 10 suggested tables for **"${tableTitle}"**.\n\nPlease select between 1 and 3 tables below to link:${suggestionsTag}`
+        : `Hello! I'm your AI assistant. How can I help you analyze the survey data for the question **"${tableTitle}"** today?`;
+
       setMessages([
         {
           role: "assistant",
-          content: `Hello! I'm your AI assistant. How can I help you analyze the survey data for the question **"${tableTitle}"** today?`,
+          content,
         },
       ]);
     } else {
       setMessages([]);
     }
     setIsOpen(false); // Close the chat window when chart changes
-  }, [tableId, tableTitle]);
+    setSelectedRefTableIds(new Set()); // Clear reference selections on table change
+  }, [tableId, tableTitle, suggestionsKey]);
 
   if (!tableId) return null;
 
   const handleClearChat = () => {
+    const hasSuggestions = initialSuggestions.length > 0;
+    const suggestionsTag = hasSuggestions
+      ? `\n\n<suggestions>${initialSuggestions.map(t => t.id).join(", ")}</suggestions>`
+      : "";
+    const content = hasSuggestions
+      ? `Hello! I'm your Dashify AI assistant. To help support my answers with cross-referenced data, I've analyzed the survey and found the top 10 suggested tables for **"${tableTitle}"**.\n\nPlease select between 1 and 3 tables below to link:${suggestionsTag}`
+      : `Hello! I'm your Dashify AI assistant. How can I help you analyze the survey data for the question **"${tableTitle}"** today?`;
+
     setMessages([
       {
         role: "assistant",
-        content: `Hello! I'm your Dashify AI assistant. How can I help you analyze the survey data for the question **"${tableTitle}"** today?`,
+        content,
       },
     ]);
+  };
+
+  const MAX_REF_TABLES = 3;
+
+  const toggleRefTable = (id: string) => {
+    setSelectedRefTableIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else if (next.size < MAX_REF_TABLES) {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
   const handleSubmit = async (e?: React.SyntheticEvent) => {
@@ -95,6 +234,17 @@ export default function ChartChatAssistant({
       { role: "assistant", content: "" },
     ]);
 
+    // Build reference_tables payload from selected IDs
+    const referenceTables = surveyData
+      ? Array.from(selectedRefTableIds)
+        .filter((id) => surveyData[id])
+        .map((id) => ({
+          table_id: id,
+          table_title: surveyData[id].title || `Table ${id}`,
+          table_data: surveyData[id].data || {},
+        }))
+      : [];
+
     try {
       const response = await chatWithLLMStream(accessToken, {
         survey_id: surveyId,
@@ -103,6 +253,7 @@ export default function ChartChatAssistant({
         active_columns: activeColumns,
         table_data: tableData,
         messages: updatedMessages,
+        reference_tables: referenceTables.length > 0 ? referenceTables : undefined,
       });
 
       if (!response.body) {
@@ -273,8 +424,72 @@ export default function ChartChatAssistant({
     );
   };
 
+  const renderInteractiveSuggestions = (ids: string[], key: number) => {
+    return (
+      <div key={key} className="mt-4 p-3 bg-surface-container/60 rounded-lg border border-outline-variant/10 space-y-2 pointer-events-auto">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-bold text-primary-fixed-dim uppercase tracking-wider">
+            Suggested Tables to Link
+          </span>
+          <span className="text-[10px] text-on-surface-variant/70 font-medium">
+            {selectedRefTableIds.size} / 3 selected
+          </span>
+        </div>
+        <div className="space-y-1.5 max-h-[180px] overflow-y-auto custom-scrollbar pr-1">
+          {ids.map((id) => {
+            const tableInfo = surveyData?.[id];
+            if (!tableInfo) return null;
+
+            const isSelected = selectedRefTableIds.has(id);
+            const isDisabled = !isSelected && selectedRefTableIds.size >= 3;
+
+            return (
+              <button
+                key={id}
+                type="button"
+                disabled={isDisabled}
+                onClick={() => toggleRefTable(id)}
+                className={`w-full px-2.5 py-2 rounded-md flex items-center justify-between text-left transition-all border
+                  ${
+                    isSelected
+                      ? "bg-primary/15 border-primary text-on-surface shadow-[0_0_8px_rgba(245,158,11,0.2)] cursor-pointer"
+                      : isDisabled
+                      ? "bg-surface-container-high/40 border-outline-variant/10 text-on-surface-variant/40 cursor-not-allowed opacity-50"
+                      : "bg-surface-container-high/60 border-outline-variant/10 text-on-surface hover:bg-white/5 hover:border-outline-variant/30 cursor-pointer"
+                  }`}
+              >
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <span className={`material-symbols-outlined !text-[16px] ${isSelected ? "text-primary" : "text-on-surface-variant/40"}`}>
+                    {isSelected ? "check_box" : "check_box_outline_blank"}
+                  </span>
+                  <span className="text-xs font-medium truncate flex-1">{tableInfo.title || `Table ${id}`}</span>
+                </div>
+                <span className="text-[10px] text-on-surface-variant/50 ml-2 shrink-0">#{id}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const formatMessageContent = (content: string) => {
-    const lines = content.split("\n");
+    // 1. Extract suggestions tag
+    const suggestionsRegex = /<suggestions>([\s\S]*?)<\/suggestions>/i;
+    const match = content.match(suggestionsRegex);
+    let cleanContent = content;
+    let suggestedIds: string[] = [];
+
+    if (match) {
+      cleanContent = content.replace(suggestionsRegex, "").trim();
+      suggestedIds = match[1]
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+
+    // 2. Format the text content (excluding the suggestions block)
+    const lines = cleanContent.split("\n");
     const parsedElements: React.ReactNode[] = [];
     let currentTableRows: string[][] = [];
 
@@ -306,6 +521,13 @@ export default function ChartChatAssistant({
       parsedElements.push(renderTableHelper(currentTableRows, parsedElements.length));
     }
 
+    // 3. Append suggestions component at the bottom of the chat bubble
+    if (suggestedIds.length > 0) {
+      parsedElements.push(
+        renderInteractiveSuggestions(suggestedIds, parsedElements.length)
+      );
+    }
+
     return parsedElements;
   };
 
@@ -313,7 +535,7 @@ export default function ChartChatAssistant({
     <div className="fixed bottom-8 right-8 z-50 flex flex-col items-end gap-4 pointer-events-none">
       {/* Chat Window Container */}
       <div
-        className={`w-[480px] h-[500px] glass-panel rounded-xl shadow-2xl flex flex-col overflow-hidden border border-primary/20 backdrop-blur-xl transition-all duration-300 ease-out origin-bottom-right pointer-events-auto ${isOpen
+        className={`w-[480px] h-[530px] glass-panel rounded-xl shadow-2xl flex flex-col overflow-hidden border border-primary/20 backdrop-blur-xl transition-all duration-300 ease-out origin-bottom-right pointer-events-auto ${isOpen
           ? "scale-100 opacity-100 translate-y-0"
           : "scale-95 opacity-0 translate-y-4 pointer-events-none"
           }`}
@@ -344,6 +566,117 @@ export default function ChartChatAssistant({
             </button>
           </div>
         </div>
+
+        {/* Reference Tables Selector Bar */}
+        {otherTables.length > 0 && (
+          <div className="relative border-b border-outline-variant/15 bg-surface-container-low/40" ref={refSelectorRef}>
+            <button
+              onClick={() => setShowRefSelector(!showRefSelector)}
+              className="w-full px-4 py-2 flex items-center justify-between text-xs cursor-pointer hover:bg-white/5 transition-colors"
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-secondary !text-[16px]">link</span>
+                <span className="text-on-surface-variant font-medium">
+                  {selectedRefTableIds.size === 0
+                    ? "Cross-reference other tables..."
+                    : `${selectedRefTableIds.size} table${selectedRefTableIds.size > 1 ? "s" : ""} linked`}
+                </span>
+              </div>
+              <span className={`material-symbols-outlined !text-[16px] text-on-surface-variant transition-transform ${showRefSelector ? "rotate-180" : ""}`}>
+                expand_more
+              </span>
+            </button>
+
+            {/* Selected table pills */}
+            {selectedRefTableIds.size > 0 && !showRefSelector && (
+              <div className="px-4 pb-2 flex flex-wrap gap-1">
+                {Array.from(selectedRefTableIds).map((id) => {
+                  const info = otherTables.find((t) => t.id === id);
+                  return (
+                    <span
+                      key={id}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary/15 border border-secondary/20 text-[10px] text-secondary font-medium max-w-[180px]"
+                    >
+                      <span className="truncate">{info?.title || `Table ${id}`}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleRefTable(id);
+                        }}
+                        className="material-symbols-outlined !text-[12px] hover:text-error transition-colors cursor-pointer"
+                      >
+                        close
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Dropdown panel */}
+            {showRefSelector && (
+              <div className="absolute left-0 right-0 top-full z-50 bg-surface-container border border-outline-variant/20 rounded-b-xl shadow-xl max-h-[240px] flex flex-col overflow-hidden">
+                {/* Search input */}
+                <div className="p-2 border-b border-outline-variant/10">
+                  <input
+                    type="text"
+                    placeholder="Search tables..."
+                    value={refSearch}
+                    onChange={(e) => setRefSearch(e.target.value)}
+                    className="w-full bg-surface-container-high border border-outline-variant/20 rounded-md px-2.5 py-1.5 text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  />
+                </div>
+
+                {/* Table list */}
+                <div className="overflow-y-auto custom-scrollbar flex-1">
+                  {filteredOtherTables.length === 0 ? (
+                    <div className="p-3 text-center text-xs text-on-surface-variant/50">No tables found</div>
+                  ) : (
+                    filteredOtherTables.map((table) => {
+                      const isSelected = selectedRefTableIds.has(table.id);
+                      const isDisabled = !isSelected && selectedRefTableIds.size >= MAX_REF_TABLES;
+                      return (
+                        <button
+                          key={table.id}
+                          onClick={() => toggleRefTable(table.id)}
+                          disabled={isDisabled}
+                          className={`w-full px-3 py-2 flex items-center gap-2 text-left text-xs transition-colors
+                            ${isSelected
+                              ? "bg-secondary/10 text-secondary border-l-2 border-secondary cursor-pointer"
+                              : isDisabled
+                                ? "text-on-surface-variant/30 border-l-2 border-transparent cursor-not-allowed"
+                                : "hover:bg-white/5 text-on-surface-variant border-l-2 border-transparent cursor-pointer"
+                            }`}
+                        >
+                          <span className={`material-symbols-outlined !text-[16px] ${isSelected ? "text-secondary" : isDisabled ? "text-on-surface-variant/20" : "text-on-surface-variant/40"}`}>
+                            {isSelected ? "check_box" : "check_box_outline_blank"}
+                          </span>
+                          <span className="truncate flex-1 font-medium">{table.title}</span>
+                          <span className="text-[10px] text-on-surface-variant/40 shrink-0">#{table.id}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Footer with clear action */}
+                {selectedRefTableIds.size > 0 && (
+                  <div className="p-2 border-t border-outline-variant/10 flex justify-between items-center">
+                    <span className="text-[10px] text-on-surface-variant/60">
+                      {selectedRefTableIds.size}/{MAX_REF_TABLES} selected
+                    </span>
+                    <button
+                      onClick={() => setSelectedRefTableIds(new Set())}
+                      className="text-[10px] text-error hover:text-error/80 font-medium cursor-pointer"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Chat History */}
         <div

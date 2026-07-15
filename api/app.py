@@ -96,31 +96,37 @@ def create_app(config: Config | None = None) -> Flask:
             "service": "dashify-api",
         }), 200
 
-    # Global error handlers
+    # Global error handlers — return JSON with CORS headers so the browser
+    # never masks a real auth/server error as a CORS failure.
+    def _cors_jsonify(data, status):
+        resp = jsonify(data)
+        resp.status_code = status
+        return resp
+
     @app.errorhandler(400)
     def bad_request(e):
-        return jsonify({"error": str(e.description)}), 400
+        return _cors_jsonify({"error": str(e.description)}, 400)
 
     @app.errorhandler(401)
     def unauthorized(e):
-        return jsonify({"error": "Unauthorized"}), 401
+        return _cors_jsonify({"error": "Unauthorized"}, 401)
 
     @app.errorhandler(403)
     def forbidden(e):
-        return jsonify({"error": "Forbidden"}), 403
+        return _cors_jsonify({"error": "Forbidden"}, 403)
 
     @app.errorhandler(404)
     def not_found(e):
-        return jsonify({"error": "Not found"}), 404
+        return _cors_jsonify({"error": "Not found"}, 404)
 
     @app.errorhandler(413)
     def payload_too_large(e):
-        return jsonify({"error": "File too large. Maximum size is 50MB."}), 413
+        return _cors_jsonify({"error": "File too large. Maximum size is 50MB."}, 413)
 
     @app.errorhandler(500)
     def internal_error(e):
         logging.exception("Internal server error")
-        return jsonify({"error": "Internal server error"}), 500
+        return _cors_jsonify({"error": "Internal server error"}, 500)
 
     return app
 
