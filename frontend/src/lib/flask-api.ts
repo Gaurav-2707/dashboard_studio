@@ -303,6 +303,11 @@ export async function chatWithLLMStream(
     active_columns: string[];
     table_data: Record<string, Record<string, number | string>>;
     messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+    reference_tables?: Array<{
+      table_id: string;
+      table_title: string;
+      table_data: Record<string, Record<string, number | string>>;
+    }>;
   }
 ): Promise<Response> {
   const url = `${API_URL}/api/surveys/chat`;
@@ -318,9 +323,13 @@ export async function chatWithLLMStream(
   if (!res.ok) {
     let body: any;
     try {
-      body = await res.json();
+      body = await res.clone().json();
     } catch {
-      body = { error: await res.text() || `HTTP error ${res.status}` };
+      try {
+        body = { error: await res.clone().text() || `HTTP error ${res.status}` };
+      } catch {
+        body = { error: `HTTP error ${res.status}` };
+      }
     }
     throw new FlaskAPIError(res.status, body);
   }

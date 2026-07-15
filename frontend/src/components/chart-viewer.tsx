@@ -1414,6 +1414,7 @@ export default function ChartViewer({
           activeColumns={activeColumns}
           tableData={computedTableData}
           accessToken={accessToken}
+          surveyData={surveyData}
         />
       )}
 
