@@ -512,14 +512,22 @@ export default function ChartViewer({
       };
 
       if (chartType === "Pie") {
+        const percentFormat = roundValues ? ".0%" : ".2%";
+        const template = showLabels
+          ? `%{label}<br>%{percent:${percentFormat}}`
+          : `%{percent:${percentFormat}}`;
+
         return {
           ...baseTrace,
           type: "pie" as const,
           labels: wrappedAnswers,
           values,
-          textinfo: "label+percent",
+          texttemplate: template,
           textposition: "inside",
           insidetextorientation: "horizontal" as const,
+          insidetextfont: {
+            size: showLabels ? chartFontSize : chartFontSize + 4,
+          },
           marker: {
             colors: answers.map((_, i) => colors[i % colors.length]),
           },
@@ -568,7 +576,7 @@ export default function ChartViewer({
         hovertemplate: `<b>${breakName}</b><br>%{x}: %{y:.1f}%<extra></extra>`,
       };
     });
-  }, [displayData, chartType, colors, showLabels, roundValues]);
+  }, [displayData, chartType, colors, showLabels, roundValues, chartFontSize]);
 
   const displayAnswersCount = useMemo(() => new Set(displayData.map((d) => d.answer)).size, [displayData]);
 
