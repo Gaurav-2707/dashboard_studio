@@ -283,6 +283,7 @@ export default function ChartViewer({
   const [showAll, setShowAll] = useState(false);
   const [topN, setTopN] = useState(20);
   const [chartTitle, setChartTitle] = useState("");
+  const [showChartTitle, setShowChartTitle] = useState(true);
   const [axisLabel, setAxisLabel] = useState("Percentage (%)");
   const [paletteName, setPaletteName] = useState("Maruti");
   const [chartSizeName, setChartSizeName] = useState<"Small" | "Medium" | "Large">("Medium");
@@ -485,7 +486,7 @@ export default function ChartViewer({
   const selectedGroup = activeColumns.join(", ");
   const defaultTitle = `${cleanTitle(selectedTable?.title || "Untitled")} by ${selectedGroup}`;
   const effectiveTitle = chartTitle || defaultTitle;
-  const wrappedTitle = wrapText(effectiveTitle, 70).join("<br>");
+  const wrappedTitle = showChartTitle ? wrapText(effectiveTitle, 70).join("<br>") : "";
   const colors = COLOR_PALETTES[paletteName] || COLOR_PALETTES.Default;
   const [chartW, chartH] = CHART_SIZES[chartSizeName] || CHART_SIZES.Medium;
   const width = chartW * 95;
@@ -572,12 +573,14 @@ export default function ChartViewer({
   const displayAnswersCount = useMemo(() => new Set(displayData.map((d) => d.answer)).size, [displayData]);
 
   const titleLinesCount = useMemo(() => {
+    if (!showChartTitle) return 0;
     return wrapText(effectiveTitle, 70).length;
-  }, [effectiveTitle]);
+  }, [effectiveTitle, showChartTitle]);
 
   const topMargin = useMemo(() => {
+    if (!showChartTitle) return 30;
     return Math.max(75, titleLinesCount * (chartFontSize + 8) + 25);
-  }, [titleLinesCount, chartFontSize]);
+  }, [titleLinesCount, chartFontSize, showChartTitle]);
 
   const maxAnswerLines = useMemo(() => {
     let maxLines = 1;
@@ -692,7 +695,7 @@ export default function ChartViewer({
         color: "#475569",
         size: chartFontSize,
       },
-      title: {
+      title: showChartTitle ? {
         text: `<b>${wrappedTitle}</b>`,
         font: { size: chartFontSize + 3, color: "#333333", family: '"Hanken Grotesk", "Inter", sans-serif' },
         xref: "container" as const,
@@ -701,7 +704,7 @@ export default function ChartViewer({
         y: 0.97,
         xanchor: "center" as const,
         yanchor: "top" as const,
-      },
+      } : undefined,
       xaxis: {
         type: chartType !== "Horizontal bar" ? ("category" as const) : undefined,
         showgrid: showGridlines,
@@ -740,7 +743,7 @@ export default function ChartViewer({
         font: { size: chartFontSize - 2, family: '"Inter", sans-serif' },
       },
     }),
-    [width, plotHeight, wrappedTitle, showGridlines, labelRotation, axisLabel, chartType, chartFontSize, legendPosition, legendConfig, topMargin, bottomMargin]
+    [width, plotHeight, wrappedTitle, showGridlines, labelRotation, axisLabel, chartType, chartFontSize, legendPosition, legendConfig, topMargin, bottomMargin, showChartTitle]
   );
 
   const uniqueAnswers = new Set(chartData.map((d) => d.answer));
@@ -976,13 +979,25 @@ export default function ChartViewer({
         {showCustomization && (
           <div className="space-y-md mt-2 pt-2 border-t border-outline-variant/10">
             <div className="flex flex-col gap-1">
-              <label className="text-label-sm text-on-surface-variant">Custom Title</label>
+              <div className="flex items-center justify-between">
+                <label className="text-label-sm text-on-surface-variant">Custom Title</label>
+                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <span className="text-[11px] text-on-surface-variant">Show title</span>
+                  <input
+                    type="checkbox"
+                    checked={showChartTitle}
+                    onChange={(e) => setShowChartTitle(e.target.checked)}
+                    className="rounded bg-surface-container border-outline-variant text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                  />
+                </label>
+              </div>
               <input
                 type="text"
                 value={chartTitle || defaultTitle}
                 onChange={(e) => setChartTitle(e.target.value)}
+                disabled={!showChartTitle}
                 placeholder={defaultTitle}
-                className="bg-surface-container-high/60 border border-outline-variant/30 rounded-lg text-on-surface py-1.5 px-3 text-[11px] outline-none"
+                className="bg-surface-container-high/60 border border-outline-variant/30 rounded-lg text-on-surface py-1.5 px-3 text-[11px] outline-none disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
             <div className="flex flex-col gap-1">
