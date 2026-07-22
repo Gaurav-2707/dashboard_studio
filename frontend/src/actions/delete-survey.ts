@@ -29,8 +29,8 @@ export async function deleteSurveyAction(
     .eq("id", user.id)
     .single();
 
-  if (!profile || profile.role !== "admin") {
-    return { success: false, error: "Forbidden: Only admins can delete surveys." };
+  if (!profile || (profile.role !== "admin" && profile.role !== "super_admin")) {
+    return { success: false, error: "Forbidden: Only admins and super admins can delete surveys." };
   }
 
   // For tenant-bound admins, verify survey belongs to their company
